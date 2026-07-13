@@ -1,0 +1,58 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: saas-admin-api
+
+  datasource:
+    # 접속 정보(호스트 포함)는 저장소에 두지 않는다. 전부 환경변수로 주입한다.
+    # 런타임 계정(saas_app)은 DDL 권한이 없고 tenant_saas 외 DB 에 접근할 수 없다.
+    # → MySQL 5.7 에 RLS 가 없는 상황에서, 최소한 크로스 DB 유출은 DB 권한으로 차단한다.
+    url: ${SAAS_DB_URL}
+    username: ${SAAS_DB_USER}
+    password: ${SAAS_DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 10000
+
+  jpa:
+    hibernate:
+      # 스키마의 진실 공급원은 Flyway 다. Hibernate 가 스키마를 건드리지 못하게 막는다.
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+        jdbc:
+          time_zone: Asia/Seoul
+
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+    # 마이그레이션은 DDL 권한을 가진 별도 계정으로 수행한다.
+    # (런타임 계정 saas_app 은 DDL 권한이 없다)
+    url: ${SAAS_DB_URL}
+    user: ${SAAS_DB_MIGRATE_USER}
+    password: ${SAAS_DB_MIGRATE_PASSWORD}
+
+jwt:
+  secret: ${SAAS_JWT_SECRET}
+  access-token-validity-seconds: 1800      # 30분
+  refresh-token-validity-seconds: 1209600  # 14일
+
+# 최초 1회 플랫폼 관리자 계정 부트스트랩.
+# 비밀번호 해시를 마이그레이션에 하드코딩하지 않기 위해 환경변수로 주입받는다.
+platform:
+  admin:
+    bootstrap-enabled: ${SAAS_ADMIN_BOOTSTRAP:false}
+    email: ${SAAS_ADMIN_EMAIL:}
+    password: ${SAAS_ADMIN_PASSWORD:}
+    name: ${SAAS_ADMIN_NAME:플랫폼 관리자}
+
+logging:
+  level:
+    org.flywaydb: INFO
+    com.saas.admin: DEBUG

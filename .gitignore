@@ -1,0 +1,24 @@
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+### 자격증명 — 절대 커밋 금지
+.env
+.env.local
+application-local.yml
+src/main/resources/application-local.yml
+
+### IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+### OS
+.DS_Store
+Thumbs.db
+
+### Logs
+*.log
+logs/

@@ -14,17 +14,24 @@
 |---|---|---|
 | Runtime | Java 17 / Spring Boot 3.2 / Maven | 기존 `food-biz-api` 컨벤션과 동일 |
 | DB | MySQL 5.7.44 (기존 서버) | 신규 스키마 `tenant_saas` |
-| 마이그레이션 | **Liquibase** | Flyway 아님 — 아래 참조 |
+| 스키마 관리 | **JPA 엔티티 + `ddl-auto: update`** | 마이그레이션 도구를 쓰지 않는다 |
 | 인증 | Spring Security + JWT | |
 
-### 왜 Flyway가 아니라 Liquibase인가
+### 마이그레이션 도구를 쓰지 않는다
 
-Flyway **Community Edition은 모든 버전에서 MySQL 5.7 지원을 중단**했다(5.7은 2023-10 EOL).
-`flyway:migrate` 실행 시 `Flyway Teams Edition or MySQL upgrade required` 로 차단된다.
-8.x까지 내려도 동일하며, 구버전은 Spring Boot 3.2와 클래스패스 충돌까지 난다.
-Liquibase는 MySQL 5.7을 제한 없이 지원하므로 이쪽을 택했다.
+Liquibase를 쓰다가 **걷어냈다(2026-07-14).** SQL/changelog를 작성하지 않기로 했다.
+스키마의 진실 공급원은 **JPA 엔티티**이고, Hibernate가 기동 시 테이블을 만든다.
 
-> DB를 8.0 이상으로 올리면 Flyway로 되돌리는 것도 가능하다.
+새 기능이 필요하면 **엔티티만 작성하고 앱을 띄우면 된다.** SQL을 쓸 일이 없다.
+
+> **`ddl-auto: update`의 한계는 알고 써야 한다.** 자세한 내용은 [`CLAUDE.md`](./CLAUDE.md) §1.
+>
+> - **추가만 한다.** 타입 변경·컬럼 삭제·이름 변경은 조용히 무시한다.
+> - **기존 테이블은 건드리지 않는다.** 덕분에 손으로 만들어둔 FK 8개, 유니크 10개,
+>   STORED 생성 컬럼 3개가 전부 살아 있다.
+> - **새 테이블에는 제약이 안 붙는다.** 특히 "테넌트당 1건" 같은 부분 유니크는
+>   Hibernate로 만들 수 없어(MySQL 5.7엔 부분 유니크 인덱스가 없다)
+>   **애플리케이션 코드에서 막아야 하고, 동시 요청에는 뚫린다.**
 
 ---
 
@@ -40,43 +47,162 @@ Liquibase는 MySQL 5.7을 제한 없이 지원하므로 이쪽을 택했다.
 
 | 계정 | 권한 | 용도 |
 |---|---|---|
-| `saas_app` | `tenant_saas.*` DML만 | 애플리케이션 런타임. DDL 불가, `cwh` 접근 불가 |
-| `saas_migrate` | `tenant_saas.*` ALL | Liquibase 전용 |
+| `saas_app` | `tenant_saas.*` ALL | 애플리케이션 런타임. `cwh` 접근 불가 |
+| `saas_migrate` | `tenant_saas.*` ALL | Liquibase 전용이었으나 **현재 미사용** |
+
+`saas_app`이 DDL 권한을 갖는 이유는 `ddl-auto: update`가 테이블을 만들어야 하기 때문이다.
+**범위는 `tenant_saas`로 한정돼 있어 `cwh`는 보이지도 않는다** (실측 확인).
+
+---
+
+## JDK — `mvnw` 대신 `mvnw17` 을 쓴다 (필독)
+
+이 저장소는 **Java 17** 이지만, 개발 PC 의 시스템 `JAVA_HOME` 은 **메인 프로젝트(Java 8 / Zulu 8)** 가
+쓰고 있어 바꿀 수 없다. Spring Boot 3.x 는 Java 17 이 최소 요구사항이라 Java 8 로는 빌드조차 안 된다.
+
+그래서 두 JDK 를 나란히 두고, **이 프로젝트만 JDK 17 로 스위칭**한다.
+
+| | 경로 | 쓰는 곳 |
+|---|---|---|
+| JDK 8 (Zulu) | `C:\SHIS\zulu8.40.0.25-ca-jdk8.0.222-win_x64` | 시스템 `JAVA_HOME` — 메인 프로젝트 |
+| JDK 17 (Temurin) | `C:\SHIS\jdk-17` | 이 프로젝트 전용 |
+
+**시스템 `JAVA_HOME` 과 `PATH` 는 절대 건드리지 않는다.** 바꾸는 순간 메인 프로젝트 빌드가 깨진다.
+대신 `mvnw17.cmd` 가 자기 프로세스 안에서만 `JAVA_HOME` 을 17 로 덮어쓰고 `mvnw` 에 위임한다.
+
+```powershell
+.\mvnw17.cmd -v     # Java version: 17.0.19, Eclipse Adoptium 가 찍히면 정상
+```
+
+> JDK 17 을 다른 경로에 뒀다면 `JAVA17_HOME` 환경변수로 덮어쓸 수 있다.
+> JDK 17 은 MSI/winget 이 아니라 **zip 압축 해제**로 설치했다 — 설치 프로그램이 `PATH` 나
+> `JAVA_HOME` 을 자동으로 건드려 Java 8 환경을 깨뜨리는 것을 막기 위해서다.
+
+### IntelliJ
+
+IDE 는 시스템 `JAVA_HOME` 을 따라가지 않고 프로젝트별 설정을 쓰므로, 이 프로젝트를 열고 아래 두 곳을
+JDK 17 로 지정한다. 메인 프로젝트(Java 8) 설정과 서로 간섭하지 않는다.
+
+- **File → Project Structure → Project SDK** → `C:\SHIS\jdk-17` (SDK 목록에 없으면 `Add JDK` 로 추가)
+- **Settings → Build Tools → Maven → Runner → JRE** → 위 SDK
 
 ---
 
 ## 로컬 실행
 
-```bash
-cp .env.example .env      # 실제 값 채우기 (.env 는 커밋 금지)
-set -a && . ./.env && set +a
-
-./mvnw liquibase:update   # 마이그레이션만 실행
-./mvnw spring-boot:run    # 앱 실행 (기동 시 Liquibase 자동 실행)
+```powershell
+copy .env.example .env    # 실제 값 채우기 (.env 는 커밋 금지)
+.\run.ps1                 # → http://localhost:8081
 ```
 
-### 마이그레이션 상태 확인 / 롤백
+`run.ps1` 이 `.env` 를 UTF-8로 읽어 주입하고 JDK 17로 앱을 띄운다.
+기동 시 Hibernate 가 없는 테이블·컬럼을 만든다 (`ddl-auto: update`).
 
-```bash
-./mvnw liquibase:status
-./mvnw liquibase:rollback -Dliquibase.rollbackCount=1
+직접 하려면 이렇게 한다.
+
+```powershell
+# -Encoding UTF8 은 필수다. PowerShell 5.1 의 Get-Content 기본값은 ANSI(CP949) 라
+# 이걸 빼면 SAAS_ADMIN_NAME 같은 한글 값이 깨진 채로 환경변수에 들어간다.
+Get-Content .env -Encoding UTF8 | Where-Object { $_ -match '^\s*[^#].*=' } | ForEach-Object {
+    $k, $v = $_ -split '=', 2
+    [Environment]::SetEnvironmentVariable($k.Trim(), $v.Trim(), 'Process')
+}
+.\mvnw17.cmd spring-boot:run
 ```
+
+---
+
+## API (현재 구현된 범위)
+
+플랫폼 관리자 시스템 — **관리자 로그인 + 업체 등록**까지 동작한다. (설계안 §17 의 1번)
+
+| 메서드 | 경로 | 인증 | 설명 |
+|---|---|---|---|
+| POST | `/api/auth/login` | 없음 | 이메일+비밀번호. 5회 연속 실패 시 15분 잠금 |
+| POST | `/api/auth/refresh` | 없음 | 리프레시 토큰 회전 (쓴 토큰은 즉시 폐기) |
+| POST | `/api/auth/select-tenant` | 필요 | 업체 선택 → 테넌트 컨텍스트 토큰 재발급 |
+| POST | `/api/auth/logout` | 필요 | 해당 사용자의 리프레시 토큰 전부 폐기 |
+| GET | `/api/auth/me` | 필요 | 현재 토큰의 주체 |
+| POST | `/api/platform-admin/tenants` | `PLATFORM_ADMIN` | **업체 등록** — 업체 + 대표 계정 + 구독을 한 트랜잭션에 |
+| GET | `/api/platform-admin/tenants` | `PLATFORM_ADMIN` | 업체 목록 (`?status=PENDING`) |
+| GET | `/api/platform-admin/tenants/{id}` | `PLATFORM_ADMIN` | 업체 단건 |
+| POST | `/api/platform-admin/tenants/{id}/activate` | `PLATFORM_ADMIN` | 서비스 개설 (PENDING/SUSPENDED → ACTIVE) |
+| POST | `/api/platform-admin/tenants/{id}/suspend` | `PLATFORM_ADMIN` | 서비스 중지 (ACTIVE → SUSPENDED) |
+
+### 로그인 흐름 — 2단계다 (설계안 §11)
+
+한 사람이 여러 업체에 소속될 수 있으므로(프랜차이즈 점주), 로그인만으로는 테넌트가 정해지지 않는다.
+
+```text
+POST /api/auth/login
+  → accessToken (tenantId 없음) + memberships[]
+  → 플랫폼 관리자면 memberships 는 비어 있고, 이 토큰으로 바로 /api/platform-admin/** 사용
+
+POST /api/auth/select-tenant  { tenantId }
+  → tenant_user 에서 소속을 재검증한 뒤 tenantId 가 담긴 accessToken 재발급
+```
+
+프론트가 보낸 `tenantId` 는 **어떤 경우에도 신뢰하지 않는다.** 매번 `tenant_user` 로 소속을 다시 확인한다.
+
+### 업체 등록 시 slug 검증
+
+등록 시점에 3중으로 막는다. 라우팅이 우연히 동작하는 데 기대지 않는다. (설계안 §2.2)
+
+| 상황 | 응답 |
+|---|---|
+| 형식 위반 (한글, 연속 하이픈, 3자 미만 …) | `400 SLUG_INVALID_FORMAT` |
+| 예약어 (`admin`, `api`, `login` … 37건) | `409 SLUG_RESERVED` |
+| 이미 사용 중 | `409 SLUG_DUPLICATED` |
+
+> **한글 요청 주의 (PowerShell)**: PS 5.1 의 `Invoke-RestMethod` 는 문자열 `-Body` 를 ASCII 로
+> 인코딩해서 보낸다. 업체명 같은 한글이 서버에 닿기 전에 `?` 로 바뀐다.
+> UTF-8 바이트로 직접 넘겨야 한다.
+>
+> ```powershell
+> $bytes = [System.Text.Encoding]::UTF8.GetBytes(($obj | ConvertTo-Json))
+> Invoke-RestMethod -Uri $url -Method Post -Body $bytes `
+>     -ContentType "application/json; charset=utf-8" -Headers $H
+> ```
 
 ---
 
 ## 스키마
 
-`src/main/resources/db/changelog/` 아래 changelog로 관리한다.
-Hibernate `ddl-auto`는 `validate`로 고정 — **스키마의 진실 공급원은 Liquibase다.**
+**진실 공급원은 JPA 엔티티다.** 마이그레이션 파일은 없다.
+기동 시 Hibernate(`ddl-auto: update`)가 없는 테이블·컬럼을 만든다.
 
-| 파일 | 내용 |
+### 스키마를 바꿀 때
+
+**엔티티만 고치고 앱을 다시 띄운다.** 그게 전부다.
+
+다만 `update`는 **추가만 한다.** 아래는 안 된다 — 조용히 무시하고 아무 에러도 내지 않는다.
+
+```text
+컬럼 타입 변경 / 컬럼 삭제 / 이름 변경 / 제약 추가·삭제
+```
+
+이런 변경이 필요하면 DB에 직접 `ALTER TABLE`을 실행해야 한다.
+
+### 현재 테이블 (14개)
+
+Liquibase 시절에 만들어진 것들이라 **FK·유니크·STORED 생성 컬럼이 전부 붙어 있다.**
+`ddl-auto: update`는 기존 테이블을 건드리지 않으므로 이 제약들은 그대로 유지된다.
+
+| 그룹 | 테이블 |
 |---|---|
-| `001-platform-core.sql` | `tenant`, `tenant_plan`, `reserved_slug`, `tenant_subscription`, `tenant_domain`, `tenant_usage_daily` |
-| `002-auth.sql` | `user_account`, `role`, `permission`, `role_permission`, `tenant_user`, `refresh_token` |
-| `003-audit-notice.sql` | `audit_log`, `platform_notice` |
-| `004-seed-reference-data.sql` | 예약어 slug 37건, 역할 5종, 권한 23종, 요금제 3종 |
+| 플랫폼 코어 | `tenant`, `tenant_plan`, `reserved_slug`, `tenant_subscription`, `tenant_domain`, `tenant_usage_daily` |
+| 인증 | `user_account`, `role`, `permission`, `role_permission`, `tenant_user`, `refresh_token` |
+| 감사·공지 | `audit_log`, `platform_notice` |
 
-### MySQL 5.7 대응 기법 (스키마를 고칠 때 반드시 알아야 함)
+시드 데이터: 예약어 slug 37건, 역할 5종, 권한 23종, 역할-권한 45건, 요금제 3종.
+
+> **⚠️ 앞으로 Hibernate가 만드는 새 테이블에는 이 제약들이 안 붙는다.**
+> 특히 `owner_marker` 같은 **부분 유니크("테넌트당 1건")는 Hibernate로 만들 수 없다.**
+> MySQL 5.7엔 부분 유니크 인덱스가 없어 STORED 생성 컬럼으로 우회해야 하는데,
+> Hibernate는 그 개념을 모른다. 애플리케이션 코드로 막아야 하고 **동시 요청에는 뚫린다.**
+> 자세한 내용은 [`CLAUDE.md`](./CLAUDE.md) §1.
+
+### MySQL 5.7 대응 기법 (기존 테이블을 이해하려면 알아야 함)
 
 **1. `CHECK` 제약은 무시된다** → 상태값은 `ENUM`으로 선언한다.
 `sql_mode`에 `STRICT_TRANS_TABLES`가 있어 ENUM 범위 밖 값은 INSERT 시점에 에러가 난다.

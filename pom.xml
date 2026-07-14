@@ -27,6 +27,11 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
+        <!--
+          스키마의 진실 공급원은 JPA 엔티티다. (마이그레이션 도구를 쓰지 않는다)
+          Hibernate 의 ddl-auto=update 가 테이블을 만들고 컬럼을 추가한다.
+          → application.yml 의 spring.jpa.hibernate.ddl-auto 주석 참조.
+        -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
@@ -42,17 +47,6 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
-        </dependency>
-
-        <!--
-          마이그레이션 도구로 Flyway 가 아닌 Liquibase 를 쓴다.
-          Flyway Community Edition 은 MySQL 5.7 을 더 이상 지원하지 않고(5.7 은 2023-10 EOL)
-          Teams(유료) 라이선스를 요구한다. 운영 DB 가 5.7.44 이므로 Liquibase 로 간다.
-          → DB 를 8.0 이상으로 올리면 Flyway 로 되돌리는 것도 가능하다.
-        -->
-        <dependency>
-            <groupId>org.liquibase</groupId>
-            <artifactId>liquibase-core</artifactId>
         </dependency>
 
         <dependency>
@@ -78,6 +72,13 @@
             <artifactId>jjwt-jackson</artifactId>
             <version>0.11.5</version>
             <scope>runtime</scope>
+        </dependency>
+
+        <!-- Swagger UI / OpenAPI 3. Spring Boot 3.x 는 springfox 가 아니라 springdoc 을 쓴다. -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.3.0</version>
         </dependency>
 
         <dependency>
@@ -118,30 +119,6 @@
                         </exclude>
                     </excludes>
                 </configuration>
-            </plugin>
-
-            <!-- 앱을 띄우지 않고 마이그레이션만 실행: ./mvnw liquibase:update -->
-            <plugin>
-                <groupId>org.liquibase</groupId>
-                <artifactId>liquibase-maven-plugin</artifactId>
-                <version>4.25.1</version>
-                <configuration>
-                    <!-- Spring Boot 런타임(classpath:) 과 동일하게 경로가 해석되도록
-                         searchPath 를 리소스 루트로 잡는다. -->
-                    <searchPath>src/main/resources</searchPath>
-                    <changeLogFile>db/changelog/db.changelog-master.yaml</changeLogFile>
-                    <!-- 접속 정보는 저장소에 두지 않는다. .env 에서 주입한다. -->
-                    <url>${env.SAAS_DB_URL}</url>
-                    <username>${env.SAAS_DB_MIGRATE_USER}</username>
-                    <password>${env.SAAS_DB_MIGRATE_PASSWORD}</password>
-                </configuration>
-                <dependencies>
-                    <dependency>
-                        <groupId>com.mysql</groupId>
-                        <artifactId>mysql-connector-j</artifactId>
-                        <version>8.2.0</version>
-                    </dependency>
-                </dependencies>
             </plugin>
         </plugins>
     </build>

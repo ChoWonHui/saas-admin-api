@@ -1,0 +1,190 @@
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * 범용 SQL 실행기. tools/db.ps1 이 호출한다. 직접 실행하지 말 것.
+ * <p>
+ * 접속 정보는 환경변수로 받는다 (db.ps1 이 .env 에서 읽어 넘긴다).
+ *   DB_URL / DB_USER / DB_PASS
+ * <p>
+ * SQL 은 인자로 직접 받거나(-e) 파일에서 읽는다(-f).
+ * 여러 문장은 세미콜론으로 구분한다. SELECT 는 표로, 나머지는 영향받은 행 수를 출력한다.
+ */
+public class Db {
+
+    public static void main(String[] args) throws Exception {
+        String sqlText = readSql(args);
+        if (sqlText == null || sqlText.isBlank()) {
+            System.err.println("실행할 SQL 이 없다.");
+            System.exit(1);
+        }
+
+        String url = System.getenv("DB_URL");
+        String user = System.getenv("DB_USER");
+        String pass = System.getenv("DB_PASS");
+
+        try (Connection conn = DriverManager.getConnection(url, user, pass)) {
+            for (String sql : splitStatements(sqlText)) {
+                execute(conn, sql);
+            }
+        } catch (SQLException e) {
+            System.err.println("SQL 오류: " + e.getMessage());
+            System.exit(1);
+        }
+    }
+
+    private static void execute(Connection conn, String sql) throws SQLException {
+        System.out.println("\n[36m> " + oneLine(sql) + "[0m");
+
+        try (Statement st = conn.createStatement()) {
+            boolean hasResultSet = st.execute(sql);
+
+            if (hasResultSet) {
+                try (ResultSet rs = st.getResultSet()) {
+                    printTable(rs);
+                }
+            } else {
+                int n = st.getUpdateCount();
+                System.out.println("  영향받은 행: " + n);
+            }
+        }
+    }
+
+    /** 결과를 컬럼 폭에 맞춰 정렬된 표로 출력한다. */
+    private static void printTable(ResultSet rs) throws SQLException {
+        ResultSetMetaData meta = rs.getMetaData();
+        int cols = meta.getColumnCount();
+
+        List<String> headers = new ArrayList<>();
+        for (int i = 1; i <= cols; i++) {
+            headers.add(meta.getColumnLabel(i));
+        }
+
+        List<List<String>> rows = new ArrayList<>();
+        while (rs.next()) {
+            List<String> row = new ArrayList<>();
+            for (int i = 1; i <= cols; i++) {
+                String v = rs.getString(i);
+                row.add(v == null ? "NULL" : v);
+            }
+            rows.add(row);
+        }
+
+        // 한글은 폭이 2칸이므로 표시 폭을 따로 계산한다.
+        int[] width = new int[cols];
+        for (int i = 0; i < cols; i++) {
+            width[i] = displayWidth(headers.get(i));
+        }
+        for (List<String> row : rows) {
+            for (int i = 0; i < cols; i++) {
+                width[i] = Math.max(width[i], displayWidth(row.get(i)));
+            }
+        }
+
+        StringBuilder sep = new StringBuilder("  +");
+        for (int w : width) {
+            sep.append("-".repeat(w + 2)).append("+");
+        }
+
+        System.out.println(sep);
+        System.out.println("  " + rowText(headers, width));
+        System.out.println(sep);
+        for (List<String> row : rows) {
+            System.out.println("  " + rowText(row, width));
+        }
+        System.out.println(sep);
+        System.out.println("  " + rows.size() + "행");
+    }
+
+    private static String rowText(List<String> cells, int[] width) {
+        StringBuilder sb = new StringBuilder("|");
+        for (int i = 0; i < cells.size(); i++) {
+            String cell = cells.get(i);
+            int pad = width[i] - displayWidth(cell);
+            sb.append(" ").append(cell).append(" ".repeat(Math.max(0, pad))).append(" |");
+        }
+        return sb.toString();
+    }
+
+    /** 한글/한자 등 전각 문자는 2칸으로 센다. */
+    private static int displayWidth(String s) {
+        int w = 0;
+        for (char c : s.toCharArray()) {
+            w += (c >= 0x1100 && c <= 0xD7A3) || (c >= 0xFF00 && c <= 0xFFEF) ? 2 : 1;
+        }
+        return w;
+    }
+
+    private static String readSql(String[] args) throws IOException {
+        for (int i = 0; i < args.length - 1; i++) {
+            if ("-e".equals(args[i])) {
+                return args[i + 1];
+            }
+            if ("-f".equals(args[i])) {
+                return Files.readString(Path.of(args[i + 1]), StandardCharsets.UTF_8);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 세미콜론으로 문장을 나눈다.
+     * 따옴표 안의 세미콜론은 무시한다 (예: INSERT ... VALUES ('a;b')).
+     */
+    private static List<String> splitStatements(String text) {
+        List<String> out = new ArrayList<>();
+        StringBuilder cur = new StringBuilder();
+        char quote = 0;
+
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+
+            if (quote != 0) {
+                cur.append(c);
+                if (c == '\\' && i + 1 < text.length()) {   // 이스케이프
+                    cur.append(text.charAt(++i));
+                } else if (c == quote) {
+                    quote = 0;
+                }
+                continue;
+            }
+
+            if (c == '\'' || c == '"' || c == '`') {
+                quote = c;
+                cur.append(c);
+            } else if (c == ';') {
+                addIfMeaningful(out, cur.toString());
+                cur.setLength(0);
+            } else {
+                cur.append(c);
+            }
+        }
+        addIfMeaningful(out, cur.toString());
+        return out;
+    }
+
+    /** 주석과 빈 줄만 있는 조각은 버린다. */
+    private static void addIfMeaningful(List<String> out, String raw) {
+        StringBuilder sb = new StringBuilder();
+        for (String line : raw.split("\n")) {
+            String t = line.strip();
+            if (!t.startsWith("--") && !t.startsWith("#")) {
+                sb.append(line).append("\n");
+            }
+        }
+        String sql = sb.toString().strip();
+        if (!sql.isEmpty()) {
+            out.add(sql);
+        }
+    }
+
+    private static String oneLine(String sql) {
+        String s = sql.replaceAll("\\s+", " ").strip();
+        return s.length() > 120 ? s.substring(0, 117) + "..." : s;
+    }
+}

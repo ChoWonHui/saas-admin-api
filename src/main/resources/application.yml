@@ -1,14 +1,23 @@
 server:
-  port: 8081
+  port: 8089
 
 spring:
   application:
     name: saas-admin-api
 
+  # .env 를 프로퍼티로 직접 읽는다.
+  # 이게 없으면 IDE 의 Run 버튼처럼 환경변수를 주입하지 않고 띄우는 경우
+  #   Could not resolve placeholder 'SAAS_JWT_SECRET'
+  # 로 기동이 실패한다. optional: 이라 .env 가 없어도 에러는 나지 않는다.
+  # (셸에 실제 환경변수가 있으면 그쪽이 우선한다 — 운영 배포 시 환경변수로 덮어쓸 수 있다)
+  config:
+    import: optional:file:./.env[.properties]
+
   datasource:
     # 접속 정보(호스트 포함)는 저장소에 두지 않는다. 전부 환경변수로 주입한다.
-    # 런타임 계정(saas_app)은 DDL 권한이 없고 tenant_saas 외 DB 에 접근할 수 없다.
+    # 런타임 계정(saas_app)은 tenant_saas 외 DB 에 접근할 수 없다.
     # → MySQL 5.7 에 RLS 가 없는 상황에서, 최소한 크로스 DB 유출은 DB 권한으로 차단한다.
+    #   (ddl-auto: update 를 쓰므로 이 계정에 DDL 권한이 부여돼 있다)
     url: ${SAAS_DB_URL}
     username: ${SAAS_DB_USER}
     password: ${SAAS_DB_PASSWORD}
@@ -19,8 +28,15 @@ spring:
 
   jpa:
     hibernate:
-      # 스키마의 진실 공급원은 Flyway 다. Hibernate 가 스키마를 건드리지 못하게 막는다.
-      ddl-auto: validate
+      # 스키마의 진실 공급원은 JPA 엔티티다. Hibernate 가 테이블을 만들고 컬럼을 추가한다.
+      #
+      # update 의 한계를 알고 쓴다:
+      #  - 컬럼/테이블 "추가" 만 한다. 타입 변경·컬럼 삭제·이름 변경은 조용히 무시한다.
+      #  - 엔티티에 없는 제약(FK, 유니크, STORED 생성 컬럼)은 만들지 않는다.
+      #    기존 테이블에 이미 걸린 제약은 건드리지 않으므로 그대로 살아 있다.
+      #  - 새로 만드는 테이블에 "테넌트당 1건" 같은 제약이 필요하면
+      #    DB 가 아니라 애플리케이션 코드에서 막아야 한다.
+      ddl-auto: update
     open-in-view: false
     properties:
       hibernate:
@@ -29,14 +45,21 @@ spring:
         jdbc:
           time_zone: Asia/Seoul
 
-  liquibase:
-    enabled: true
-    change-log: classpath:db/changelog/db.changelog-master.yaml
-    # 마이그레이션은 DDL 권한을 가진 별도 계정으로 수행한다.
-    # (런타임 계정 saas_app 은 DDL 권한이 없다)
-    url: ${SAAS_DB_URL}
-    user: ${SAAS_DB_MIGRATE_USER}
-    password: ${SAAS_DB_MIGRATE_PASSWORD}
+# Swagger UI: http://localhost:8081/swagger-ui.html
+#
+# ⚠️ 운영 배포 시에는 꺼야 한다. API 구조·스키마·검증 규칙이 그대로 노출된다.
+#    SAAS_SWAGGER_ENABLED=false 로 끄면 /swagger-ui, /v3/api-docs 가 모두 404 가 된다.
+springdoc:
+  api-docs:
+    enabled: ${SAAS_SWAGGER_ENABLED:true}
+  swagger-ui:
+    enabled: ${SAAS_SWAGGER_ENABLED:true}
+    path: /swagger-ui.html
+    # 태그(@Tag)와 메서드를 선언 순서가 아니라 알파벳순으로 정렬해 화면을 안정시킨다.
+    tags-sorter: alpha
+    operations-sorter: alpha
+    # "Try it out" 후 새로고침해도 입력한 JWT 가 유지된다.
+    persist-authorization: true
 
 jwt:
   secret: ${SAAS_JWT_SECRET}
@@ -54,5 +77,4 @@ platform:
 
 logging:
   level:
-    org.flywaydb: INFO
     com.saas.admin: DEBUG

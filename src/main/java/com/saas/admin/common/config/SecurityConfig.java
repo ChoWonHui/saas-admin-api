@@ -42,6 +42,8 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/login", "/api/auth/refresh").permitAll()
+                        // 관리자(내부 직원)는 사번으로 여기서 로그인한다. 업체 사용자와 경로가 다르다.
+                        .requestMatchers("/api/auth/admin/login", "/api/auth/admin/refresh").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         // Swagger UI / OpenAPI 문서.
                         // ⚠️ 운영에서는 열어두면 안 된다. API 구조와 스키마가 그대로 노출된다.

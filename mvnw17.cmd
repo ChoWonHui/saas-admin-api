@@ -16,6 +16,13 @@
 @echo off
 setlocal
 
+@REM  Probe the known JDK 17 locations in order. JAVA17_HOME, if already set,
+@REM  always wins -- the probe only runs when it is not defined.
+if not defined JAVA17_HOME (
+  for %%D in ("C:\SHIS\jdk-17" "C:\Program Files\Java\jdk-17") do (
+    if not defined JAVA17_HOME if exist "%%~D\bin\java.exe" set "JAVA17_HOME=%%~D"
+  )
+)
 if not defined JAVA17_HOME set "JAVA17_HOME=C:\SHIS\jdk-17"
 
 if not exist "%JAVA17_HOME%\bin\java.exe" (

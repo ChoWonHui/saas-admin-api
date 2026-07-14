@@ -49,7 +49,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private List<GrantedAuthority> authorities(AuthPrincipal principal) {
         List<GrantedAuthority> authorities = new ArrayList<>();
-        if (principal.platformAdmin()) {
+        // 관리자 권한은 admin_account 에서 발급된 토큰(subjectType=ADMIN)에만 준다.
+        // platformAdmin 클레임만 보면, 옛 user_account 계정으로 발급된 토큰도 통과한다.
+        //
+        // 단, 기본 비밀번호 상태(mustChangePassword)면 관리자 권한을 주지 않는다.
+        // 기본 비밀번호는 공개된 값이다 — 그 상태로는 비밀번호 변경 외에 아무것도 할 수 없어야 하고,
+        // 화면을 우회해 API 를 직접 불러도 여기서 막힌다. (/api/platform-admin/** 은 403)
+        if (principal.isAdmin() && !principal.mustChangePassword()) {
             authorities.add(new SimpleGrantedAuthority("ROLE_PLATFORM_ADMIN"));
         }
         if (principal.roleCode() != null) {

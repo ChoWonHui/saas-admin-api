@@ -15,6 +15,17 @@ public enum ErrorCode {
     NOT_A_MEMBER(HttpStatus.FORBIDDEN, "해당 업체에 소속되어 있지 않습니다."),
     ACCESS_DENIED(HttpStatus.FORBIDDEN, "권한이 없습니다."),
 
+    // 관리자 계정 (내부 직원 — 사번으로 로그인한다)
+    INVALID_ADMIN_CREDENTIALS(HttpStatus.UNAUTHORIZED, "사번 또는 비밀번호가 올바르지 않습니다."),
+    ADMIN_NOT_FOUND(HttpStatus.NOT_FOUND, "관리자를 찾을 수 없습니다."),
+    ADMIN_ALREADY_DELETED(HttpStatus.CONFLICT, "이미 퇴사처리된 관리자입니다."),
+    CANNOT_DELETE_SELF(HttpStatus.CONFLICT, "자기 자신은 퇴사처리할 수 없습니다."),
+    CANNOT_DISABLE_LAST_ADMIN(HttpStatus.CONFLICT, "마지막으로 남은 관리자는 퇴사처리하거나 정지할 수 없습니다."),
+    EMPLOYEE_NO_EXHAUSTED(HttpStatus.CONFLICT, "올해 발급 가능한 사번을 모두 소진했습니다."),
+    EMPLOYEE_NO_GENERATION_FAILED(HttpStatus.CONFLICT, "사번 채번에 실패했습니다. 다시 시도하세요."),
+    PASSWORD_CONFIRM_MISMATCH(HttpStatus.BAD_REQUEST, "새 비밀번호와 확인이 일치하지 않습니다."),
+    PASSWORD_SAME_AS_DEFAULT(HttpStatus.BAD_REQUEST, "초기 비밀번호와 다른 비밀번호로 변경해야 합니다."),
+
     // 업체(테넌트)
     SLUG_INVALID_FORMAT(HttpStatus.BAD_REQUEST, "경로(slug) 형식이 올바르지 않습니다."),
     SLUG_RESERVED(HttpStatus.CONFLICT, "플랫폼이 예약한 경로라 사용할 수 없습니다."),

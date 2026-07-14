@@ -96,6 +96,24 @@ http://localhost:8089/v3/api-docs          OpenAPI JSON
 > **⚠️ 운영에서는 꺼야 한다.** API 구조·스키마·검증 규칙이 그대로 노출된다.
 > `SAAS_SWAGGER_ENABLED=false` 로 끄면 `/swagger-ui`, `/v3/api-docs` 가 모두 404 가 된다.
 
+### 3.1-c DB 접속 — `tools\db.ps1`
+
+**이 PC 에는 `mysql` CLI 가 없다.** 매번 Java 파일을 새로 짜지 말고 이 도구를 쓴다.
+
+```powershell
+.\tools\db.ps1 "SHOW TABLES"
+.\tools\db.ps1 "SELECT * FROM tenant"
+.\tools\db.ps1 "ALTER TABLE tenant MODIFY contact_phone VARCHAR(30); DESC tenant"
+.\tools\db.ps1 -File tools\sql\작업.sql
+.\tools\db.ps1 -Admin "GRANT ..."          # 계정·권한 작업 (SAAS_ROOT_* 필요)
+```
+
+`.env` UTF-8 로딩 / JDBC 드라이버 확보 / UTF-8 출력을 전부 자동 처리한다. 한글이 깨지지 않는다.
+기본 계정 `saas_app` 은 `tenant_saas` 에 DDL 포함 전 권한이 있어 `ALTER TABLE` 도 그냥 된다.
+
+`ddl-auto: update` 로 안 되는 작업(타입 변경 / 컬럼 삭제 / 제약 추가 / STORED 생성 컬럼)은
+전부 이 도구로 처리한다. 자세한 예시는 [`CLAUDE.md`](./CLAUDE.md) §0-A.
+
 ### 3.2 DB — 이미 구축되어 있다
 
 ```text

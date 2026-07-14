@@ -181,7 +181,38 @@ POST /api/auth/select-tenant  { tenantId }
 컬럼 타입 변경 / 컬럼 삭제 / 이름 변경 / 제약 추가·삭제
 ```
 
-이런 변경이 필요하면 DB에 직접 `ALTER TABLE`을 실행해야 한다.
+이런 변경은 `tools\db.ps1`로 직접 실행한다 (아래 참조).
+
+---
+
+## DB 접속 — `tools\db.ps1`
+
+**이 PC에는 `mysql` CLI가 없다.** 대신 이 스크립트를 쓴다.
+
+```powershell
+.\tools\db.ps1 "SHOW TABLES"
+.\tools\db.ps1 "SELECT * FROM tenant"
+.\tools\db.ps1 "DESC tenant_user"
+.\tools\db.ps1 "SHOW CREATE TABLE tenant_user"
+
+# 여러 문장은 세미콜론으로
+.\tools\db.ps1 "ALTER TABLE tenant MODIFY contact_phone VARCHAR(30); DESC tenant"
+
+# 긴 SQL은 파일로
+.\tools\db.ps1 -File tools\sql\작업.sql
+
+# 계정·권한 작업 (.env에 SAAS_ROOT_USER / SAAS_ROOT_PASSWORD 필요)
+.\tools\db.ps1 -Admin "GRANT ALL PRIVILEGES ON tenant_saas.* TO 'saas_app'@'%'"
+```
+
+`.env` 로딩(UTF-8), JDBC 드라이버 확보, UTF-8 출력을 전부 알아서 한다. **한글도 안 깨진다.**
+SELECT는 표로, DDL/DML은 영향받은 행 수로 출력한다.
+
+기본 계정 `saas_app`은 `tenant_saas`에 **DDL 포함 전 권한**이 있어 `ALTER TABLE`도 그냥 된다.
+
+> **부분 유니크("테넌트당 1건")가 필요하면** STORED 생성 컬럼을 직접 붙여야 한다.
+> MySQL 5.7엔 부분 유니크 인덱스가 없어 이게 유일한 수단이고, Hibernate는 만들지 못한다.
+> 예시는 [`CLAUDE.md`](./CLAUDE.md) §0-A.
 
 ### 현재 테이블 (14개)
 

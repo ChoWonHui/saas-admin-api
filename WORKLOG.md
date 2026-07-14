@@ -24,6 +24,8 @@
 | 감사 로그 | `LOGIN_SUCCESS` / `LOGIN_FAIL` / `TENANT_CREATE` / `TENANT_ACTIVATE` |
 | Swagger | springdoc-openapi. JWT 인증 스킴 등록 |
 | 스키마 관리 | **Liquibase 제거 → `ddl-auto: update`** (아래 참조) |
+| 개발 도구 | `tools\db.ps1` — DB 접속/SQL 실행 도구. `mysql` CLI 가 없어서 만들었다 |
+| 작업 체계 | `WORKLOG.md`(일일 일지) + `CLAUDE.md` 마감 루틴. **커밋은 사용자가 직접 한다** |
 
 Java 파일 **51개**. 설계안 §17 우선순위의 **1번(업체 등록)까지 완료**.
 

@@ -24,52 +24,37 @@
 
 ---
 
-## 0-A. 🗄️ DB 접속 — `tools\db.ps1` 을 쓴다
+## 0-A. 🗄️ DB 접속 — 저장소에 전용 도구를 두지 않는다
 
-**이 PC 에는 `mysql` CLI 가 없다.** 매번 Java 파일을 새로 짜지 말 것. 도구가 이미 있다.
+**`tools/` 폴더는 걷어냈다 (사용자 결정 2026-07-16).** 저장소는 clone 만으로 돌아가야 하고,
+전용 스크립트에 기대는 습관을 만들지 않는다. DB 작업은 **표준 수단**으로만 한다.
+
+- **사람**: 아무 SQL 클라이언트(IntelliJ Database / DBeaver / HeidiSQL / mysql CLI)로 접속한다.
+  접속 정보는 `application.yml` 의 `spring.datasource.*` 에 있다.
+- **Claude**: 스크래치 디렉터리에 단일 파일 Java 를 만들어 JDBC 로 실행한다.
+  저장소에는 아무것도 남기지 않는다.
 
 ```powershell
-.\tools\db.ps1 "SHOW TABLES"
-.\tools\db.ps1 "SELECT * FROM tenant"
-.\tools\db.ps1 "DESC tenant_user"
-.\tools\db.ps1 "SHOW CREATE TABLE tenant_user"
+# JDBC 드라이버 확보 (최초 1회, 표준 Maven)
+.\mvnw17.cmd -B -q dependency:copy-dependencies "-DincludeArtifactIds=mysql-connector-j" "-DoutputDirectory=target/lib"
 
-# 여러 문장은 세미콜론으로 (따옴표 안의 세미콜론은 무시된다)
-.\tools\db.ps1 "ALTER TABLE reservation ADD COLUMN memo VARCHAR(255); DESC reservation"
-
-# 긴 SQL 은 파일로
-.\tools\db.ps1 -File tools\sql\작업.sql
-
-# 계정 생성/권한 부여 등 스키마 밖 작업 (SAAS_ROOT_* 가 .env 에 있어야 함)
-.\tools\db.ps1 -Admin "GRANT ALL PRIVILEGES ON tenant_saas.* TO 'saas_app'@'%'"
+# 스크래치에 만든 단일 파일 Java 실행 (java 11+ 는 .java 를 바로 실행한다)
+java "-Dfile.encoding=UTF-8" "-Dstdout.encoding=UTF-8" -cp "target\lib\mysql-connector-j-8.1.0.jar" $env:TEMP\Query.java
 ```
 
-`db.ps1` 이 알아서 하는 것: `.env` UTF-8 로딩 / JDBC 드라이버 확보(최초 1회) / UTF-8 출력 /
-SELECT 는 표로, DDL·DML 은 영향받은 행 수로 출력. **한글도 깨지지 않는다.**
-
-기본 계정은 `saas_app` — `tenant_saas` 에 대해 **DDL 포함 전 권한**이 있으므로
-`CREATE TABLE` / `ALTER TABLE` 도 그냥 된다. `-Admin` 은 계정·권한 작업에만 쓴다.
+계정 `saas_app` 은 `tenant_saas` 에 **DDL 포함 전 권한**이 있으므로 `CREATE/ALTER TABLE` 도 그냥 된다.
 
 ### 스키마를 바꿔야 할 때 (`ddl-auto: update` 로 안 되는 것)
 
-`update` 는 **추가만 한다.** 아래는 `db.ps1` 로 직접 실행한다.
+`update` 는 **추가만 한다.** 컬럼 타입 변경 / 컬럼 삭제 / 제약 추가는 위 방법으로 SQL 을 직접 실행한다.
 
-| 필요한 작업 | 예시 |
-|---|---|
-| 컬럼 타입 변경 | `.\tools\db.ps1 "ALTER TABLE tenant MODIFY contact_phone VARCHAR(30)"` |
-| 컬럼 삭제 | `.\tools\db.ps1 "ALTER TABLE tenant DROP COLUMN latitude"` |
-| 유니크 제약 추가 | `.\tools\db.ps1 "ALTER TABLE x ADD UNIQUE KEY uk_x (a, b)"` |
-| **부분 유니크** (테넌트당 1건) | 아래 참조 — Hibernate 로는 불가능 |
-
-```powershell
-# "테넌트당 ACTIVE 1건" 을 DB 레벨에서 강제하려면 STORED 생성 컬럼을 직접 붙인다.
-# MySQL 5.7 에는 부분 유니크 인덱스가 없어서 이게 유일한 수단이다. (NULL 은 유니크에서 충돌하지 않음)
-.\tools\db.ps1 @"
+```sql
+-- "테넌트당 ACTIVE 1건" 을 DB 레벨에서 강제하려면 STORED 생성 컬럼을 직접 붙인다.
+-- MySQL 5.7 에는 부분 유니크 인덱스가 없어서 이게 유일한 수단이다. (NULL 은 유니크에서 충돌하지 않음)
 ALTER TABLE reservation_slot
   ADD COLUMN active_marker TINYINT UNSIGNED
       GENERATED ALWAYS AS (CASE WHEN status = 'ACTIVE' THEN 1 ELSE NULL END) STORED,
-  ADD UNIQUE KEY uk_slot__one_active (tenant_id, active_marker)
-"@
+  ADD UNIQUE KEY uk_slot__one_active (tenant_id, active_marker);
 ```
 
 > 생성 컬럼을 붙였으면 **엔티티에는 매핑하지 않는다.** 매핑하면 Hibernate 가 INSERT 를 시도해 깨진다.
@@ -156,30 +141,24 @@ FK, 유니크 제약, STORED 생성 컬럼이 **생기지 않는다.** 필요하
 
 ### 스키마 확인 / 수정이 필요할 때
 
-Claude 는 JDBC 로 DB 에 직접 접속해 확인·수정할 수 있다.
-`mysql` CLI 는 이 PC 에 없다. 아래 방식을 쓴다.
-
-```powershell
-# .env 에서 접속 정보를 읽고, JDK 17 + mysql-connector 로 단일 파일 Java 실행
-.\mvnw17.cmd dependency:copy-dependencies "-DincludeArtifactIds=mysql-connector-j" "-DoutputDirectory=target/lib"
-& "C:\SHIS\jdk-17\bin\java.exe" "-Dfile.encoding=UTF-8" "-Dstdout.encoding=UTF-8" `
-    -cp "target\lib\mysql-connector-j-8.1.0.jar" Script.java
-```
+Claude 는 JDBC 로 DB 에 직접 접속해 확인·수정할 수 있다. 방법은 §0-A 참조
+(스크래치 디렉터리의 단일 파일 Java — 저장소에는 아무것도 남기지 않는다).
 
 ---
 
 ## 2. 빌드·실행 — `mvnw` 를 직접 쓰지 않는다
 
-시스템 `JAVA_HOME` 은 **메인 프로젝트(food-biz / Java 8 / Zulu 8)** 가 쓰고 있어 바꿀 수 없다.
 Spring Boot 3.2 는 Java 17 이 최소 요구사항이라 Java 8 로는 빌드조차 안 된다.
+시스템 `JAVA_HOME` 이 Java 8 인 PC 도 있으므로 항상 아래 래퍼를 쓴다.
 
 ```powershell
-.\run.ps1                    # 앱 기동 (.env 주입 + JDK 17) → http://localhost:8081
-.\mvnw17.cmd <goal>          # Maven (JDK 17)
+.\run.ps1                    # 앱 기동 → http://localhost:8089
+.\mvnw17.cmd <goal>          # Maven (JDK 17+ 자동 탐색)
 ```
 
-`mvnw17.cmd` 가 자기 프로세스 안에서만 `JAVA_HOME` 을 `C:\SHIS\jdk-17` 로 덮어쓴다.
-시스템 환경변수는 건드리지 않는다. **`.\mvnw` 를 직접 부르면 Java 8 로 돌아 실패한다.**
+`mvnw17.cmd` 가 **JDK 17+ 를 자동 탐색**해 (JAVA17_HOME → JAVA_HOME 이 17+ → PATH 의 java →
+흔한 설치 경로 순) 자기 프로세스 안에서만 `JAVA_HOME` 을 덮어쓴다. 시스템 환경변수는 건드리지
+않는다. 특정 경로 하드코딩이 없으므로 **어느 PC 에서든 JDK 17+ 만 있으면 된다.**
 
 ---
 

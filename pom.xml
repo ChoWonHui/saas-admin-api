@@ -55,6 +55,17 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!--
+          공지 에디터 이미지 저장소. food-biz 와 같은 S3 버킷(foodbiz-uploads) + CloudFront 를 쓴다.
+          업로드는 백엔드를 경유한다(브라우저 → 우리 API → S3). 그래서 S3 CORS 설정이 필요 없고
+          자격 증명이 서버 밖으로 나가지 않는다. 저장 키는 saas-admin/ 접두어로 food-biz 와 분리한다.
+        -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.25.16</version>
+        </dependency>
+
         <!-- JWT -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>

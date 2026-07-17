@@ -95,10 +95,12 @@ React 18 + Vite. **아직 git 저장소가 아니다** (버전관리 필요).
 정적 파일과 API 가 **같은 오리진**이라 CORS 설정이 아예 없다. 백엔드는 손대지 않았다.
 
 ```powershell
-.\tools\nginx.ps1 start | stop | reload | status     # → http://localhost:8080
-cd saas-admin-web; npm run dev                       # 개발(:5173, HMR)
-cd saas-admin-web; npm run build; cd ..; .\tools\nginx.ps1 reload
+cd saas-admin-web; npm run dev      # → http://localhost:5173  (vite 가 /api 를 :8089 로 프록시)
 ```
+
+> **nginx 는 걷어냈다 (2026-07-16, 사용자 결정 — tools 폴더 전체 삭제).**
+> 개발은 vite dev 서버(:5173)로 한다. `/api` 프록시가 vite.config.js 에 있어 CORS 설정이 필요 없는
+> 것은 동일하다. 운영 배포 방식(정적 서빙)은 배포 시점에 다시 정한다.
 
 **모든 화면은 [`saas-admin-web/CLAUDE.md`](../saas-admin-web/CLAUDE.md) 의 틀을 따른다.**
 그리드(헤더 최소폭·표 내부 가로스크롤) / **"관리" 버튼 열 없음** / 더블클릭=수정 / 우클릭=메뉴 /
@@ -164,23 +166,16 @@ http://localhost:8089/v3/api-docs          OpenAPI JSON
 > **⚠️ 운영에서는 꺼야 한다.** API 구조·스키마·검증 규칙이 그대로 노출된다.
 > `SAAS_SWAGGER_ENABLED=false` 로 끄면 `/swagger-ui`, `/v3/api-docs` 가 모두 404 가 된다.
 
-### 3.1-c DB 접속 — `tools\db.ps1`
+### 3.1-c DB 접속 — 전용 도구 없음 (2026-07-16 `tools/` 삭제)
 
-**이 PC 에는 `mysql` CLI 가 없다.** 매번 Java 파일을 새로 짜지 말고 이 도구를 쓴다.
+**`tools\db.ps1` 은 걷어냈다 (사용자 결정).** 표준 수단만 쓴다.
 
-```powershell
-.\tools\db.ps1 "SHOW TABLES"
-.\tools\db.ps1 "SELECT * FROM tenant"
-.\tools\db.ps1 "ALTER TABLE tenant MODIFY contact_phone VARCHAR(30); DESC tenant"
-.\tools\db.ps1 -File tools\sql\작업.sql
-.\tools\db.ps1 -Admin "GRANT ..."          # 계정·권한 작업 (SAAS_ROOT_* 필요)
-```
+- 사람: 아무 SQL 클라이언트 (접속 정보는 `application.yml` 의 `spring.datasource.*`)
+- Claude: 스크래치 디렉터리의 단일 파일 Java + JDBC (저장소에 아무것도 남기지 않는다)
 
-`.env` UTF-8 로딩 / JDBC 드라이버 확보 / UTF-8 출력을 전부 자동 처리한다. 한글이 깨지지 않는다.
 기본 계정 `saas_app` 은 `tenant_saas` 에 DDL 포함 전 권한이 있어 `ALTER TABLE` 도 그냥 된다.
-
 `ddl-auto: update` 로 안 되는 작업(타입 변경 / 컬럼 삭제 / 제약 추가 / STORED 생성 컬럼)은
-전부 이 도구로 처리한다. 자세한 예시는 [`CLAUDE.md`](./CLAUDE.md) §0-A.
+이 방법으로 SQL 을 직접 실행한다. 자세한 예시는 [`CLAUDE.md`](./CLAUDE.md) §0-A.
 
 ### 3.2 DB — 이미 구축되어 있다
 

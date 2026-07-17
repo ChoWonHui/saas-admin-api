@@ -25,6 +25,12 @@ spring:
       maximum-pool-size: 10
       connection-timeout: 10000
 
+  # 공지 에디터 이미지 업로드 크기 제한. 이미지 1장 5MB, 요청 전체 8MB.
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 8MB
+
   jpa:
     hibernate:
       # 스키마의 진실 공급원은 JPA 엔티티다. Hibernate 가 테이블을 만들고 컬럼을 추가한다.
@@ -84,6 +90,36 @@ admin:
     name: 플랫폼 관리자
     email: jsj3216@gmail.com
     password: Admin7!wMuf9Zzhpk
+
+# 한국천문연구원 특일정보 API (공공데이터포털). 공휴일을 가져와 달력에 표시한다.
+# service-key 는 "인코딩된(Encoding)" 일반 인증키다 — URL 에 그대로 붙이고 재인코딩하지 않는다.
+holiday:
+  service-key: "TW36oDgWveScfYEaEcmTSiEcIezm14qvCGLDedkTrZtoFJE7ZL9QydmnS45oYrGCw5yZ851cA6X65AGAW%2FwQbA%3D%3D"
+
+# 공지 에디터 이미지 저장소 (AWS S3 + CloudFront).
+#
+#  - food-biz 프로젝트와 "같은" 버킷(foodbiz-uploads)·CDN 을 공유한다.
+#    저장 키는 prefix(saas-admin/) 로 분리해 food-biz 파일과 섞이지 않게 한다.
+#
+#  ⚠️ AWS access-key / secret-key 는 이 파일(=git 커밋됨)에 두지 않는다.
+#     AWS 키는 GitHub push protection 이 자동 차단하고, 노출되면 버킷 전체가 위험하다.
+#     실제 키는 git 에 안 올라가는 application-local.yml 에 두고 'local' 프로파일로 로드한다.
+#     (run.ps1 이 local 프로파일을 자동 활성화한다 — 그 파일이 없으면 아래 기본값이 쓰인다)
+#
+#  이 파일의 기본값만으로는 S3 가 꺼져 있어(enabled=false) 이미지는 base64 로 폴백된다.
+#  → 그냥 clone 해서 실행해도 앱은 정상 동작한다. S3 를 켜려면 application-local.yml 을 두거나
+#     환경변수(S3_ENABLED / S3_ACCESS_KEY / S3_SECRET_KEY)를 준다.
+storage:
+  s3:
+    enabled: ${S3_ENABLED:false}
+    bucket: ${S3_BUCKET:foodbiz-uploads}
+    region: ${S3_REGION:ap-northeast-2}
+    access-key: ${S3_ACCESS_KEY:}
+    secret-key: ${S3_SECRET_KEY:}
+    # 공개 접근 URL 의 앞부분(CloudFront). 비밀 아님 → 기본값 유지.
+    cdn-url: ${S3_CDN_URL:https://d2ziky4ycezd5d.cloudfront.net}
+    # 우리 파일이 저장될 키 접두어. food-biz 의 menu/ , notices/ 등과 겹치지 않게 한다.
+    key-prefix: ${S3_KEY_PREFIX:saas-admin}
 
 logging:
   level:

@@ -32,6 +32,15 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of(code, code.getMessage(), fieldErrors));
     }
 
+    /** 업로드 파일이 multipart 한도(5MB/요청 8MB)를 넘으면 500 대신 명확한 413 을 준다. */
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleUploadTooLarge(
+            org.springframework.web.multipart.MaxUploadSizeExceededException e) {
+        ErrorCode code = ErrorCode.FILE_TOO_LARGE;
+        return ResponseEntity.status(code.getStatus())
+                .body(ErrorResponse.of(code, code.getMessage()));
+    }
+
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException e) {
         ErrorCode code = ErrorCode.ACCESS_DENIED;

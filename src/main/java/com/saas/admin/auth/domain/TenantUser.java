@@ -69,6 +69,23 @@ public class TenantUser {
         return new TenantUser(tenantId, userId, Role.TENANT_OWNER_ID);
     }
 
+    /** 직원 멤버십 생성(대표/매니저/직원 역할). */
+    public static TenantUser of(Long tenantId, Long userId, Integer roleId) {
+        return new TenantUser(tenantId, userId, roleId);
+    }
+
+    public void changeRole(Integer roleId) {
+        if (roleId != null) this.roleId = roleId;
+    }
+
+    public void setStatus(TenantUserStatus status) {
+        if (status != null) this.status = status;
+    }
+
+    public boolean isOwner() {
+        return Role.TENANT_OWNER_ID.equals(this.roleId);
+    }
+
     public boolean isActive() {
         return status == TenantUserStatus.ACTIVE;
     }

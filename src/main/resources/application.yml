@@ -121,6 +121,16 @@ storage:
     # 우리 파일이 저장될 키 접두어. food-biz 의 menu/ , notices/ 등과 겹치지 않게 한다.
     key-prefix: ${S3_KEY_PREFIX:saas-admin}
 
+# 이미지 검색(Pixabay). 키는 application-local.yml 또는 환경변수에 둔다(여기엔 두지 않음).
+# 키가 없으면 검색 API 는 503 을 돌려주고, 프런트는 검색 버튼을 숨기거나 안내한다.
+image-search:
+  pixabay-key: ${PIXABAY_KEY:}
+
+# 테이블 QR 주문 URL 의 앞부분. QR 은 이 값 + "/order/{테이블코드}" 를 인코딩한다.
+# 손님이 스캔하면 이 주소의 주문 화면으로 간다(고객 주문 앱은 별도).
+order:
+  base-url: ${ORDER_BASE_URL:http://localhost:5173}
+
 logging:
   level:
     com.saas.admin: DEBUG

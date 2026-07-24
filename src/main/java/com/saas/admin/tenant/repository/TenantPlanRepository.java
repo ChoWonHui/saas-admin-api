@@ -8,4 +8,6 @@ import java.util.List;
 public interface TenantPlanRepository extends JpaRepository<TenantPlan, Long> {
 
     List<TenantPlan> findByActiveTrueOrderByDisplayOrderAsc();
+
+    List<TenantPlan> findAllByOrderByDisplayOrderAsc();
 }

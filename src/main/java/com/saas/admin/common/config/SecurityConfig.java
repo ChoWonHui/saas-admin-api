@@ -42,6 +42,8 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/login", "/api/auth/refresh").permitAll()
+                        // 업체 로그인(업체코드+아이디+비밀번호) 및 로그인 전 가게 이름 확인은 인증 불필요.
+                        .requestMatchers("/api/auth/tenant-login", "/api/auth/tenant-lookup").permitAll()
                         // 관리자(내부 직원)는 사번으로 여기서 로그인한다. 업체 사용자와 경로가 다르다.
                         .requestMatchers("/api/auth/admin/login", "/api/auth/admin/refresh").permitAll()
                         .requestMatchers("/actuator/health").permitAll()

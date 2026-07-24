@@ -136,6 +136,96 @@ public class AuthService {
                 tokenProvider.getAccessTokenValiditySeconds(), tenantId, roleCode);
     }
 
+    /**
+     * 업체 로그인 — 업체코드 + 아이디 + 비밀번호로 한 번에 로그인한다.
+     * 업체코드가 이미 가게를 특정하므로, 이메일 로그인과 달리 업체 선택 단계 없이
+     * 곧바로 테넌트 컨텍스트가 담긴 토큰을 발급한다.
+     */
+    @Transactional
+    public TokenResponse tenantLogin(String tenantCode, String loginId, String password,
+                                     String ip, String userAgent) {
+        String label = tenantCode + "/" + loginId; // 감사 로그용 식별자
+        // 업체 로그인은 이메일이 아니라 업체코드/아이디를 쓰므로 안내 문구를 맞춘다.
+        String badMsg = "업체코드·아이디·비밀번호를 확인해 주세요.";
+
+        // 업체코드가 틀리거나 아이디가 없거나 비밀번호가 틀린 것을 구분해 알려주지 않는다(계정 존재 유출 방지).
+        Tenant tenant = tenantRepository.findByCode(tenantCode.trim())
+                .filter(t -> t.getStatus() != TenantStatus.CLOSED && !t.isDeleted())
+                .orElseThrow(() -> {
+                    auditLoginFail(null, label, "업체코드 불일치", ip, userAgent);
+                    return new ApiException(ErrorCode.INVALID_CREDENTIALS, badMsg);
+                });
+
+        // 아이디로 먼저 찾고, 없으면 이메일로 보조 조회한다(로그인 칸에 이메일을 넣는 사람 배려).
+        String idInput = loginId.trim();
+        UserAccount user = userAccountRepository.findByTenantIdAndLoginId(tenant.getId(), idInput)
+                .or(() -> userAccountRepository.findByTenantIdAndEmail(tenant.getId(), idInput))
+                .orElseThrow(() -> {
+                    auditLoginFail(null, label, "아이디/이메일 없음", ip, userAgent);
+                    return new ApiException(ErrorCode.INVALID_CREDENTIALS, badMsg);
+                });
+
+        if (!user.isUsable()) {
+            auditLoginFail(user.getId(), label, "사용 불가 계정: " + user.getStatus(), ip, userAgent);
+            throw new ApiException(ErrorCode.ACCOUNT_DISABLED);
+        }
+        if (user.isLocked()) {
+            auditLoginFail(user.getId(), label, "잠긴 계정", ip, userAgent);
+            throw new ApiException(ErrorCode.ACCOUNT_LOCKED);
+        }
+        if (!passwordEncoder.matches(password, user.getPasswordHash())) {
+            user.onLoginFail();
+            userAccountRepository.save(user);
+            auditLoginFail(user.getId(), label, "비밀번호 불일치", ip, userAgent);
+            throw new ApiException(ErrorCode.INVALID_CREDENTIALS, badMsg);
+        }
+
+        user.onLoginSuccess();
+        userAccountRepository.save(user);
+
+        TenantUser membership = tenantUserRepository
+                .findByTenantIdAndUserId(tenant.getId(), user.getId())
+                .orElseThrow(() -> new ApiException(ErrorCode.NOT_A_MEMBER));
+        if (!membership.isActive()) {
+            throw new ApiException(ErrorCode.NOT_A_MEMBER, "해당 가게에서 활성 상태가 아닙니다.");
+        }
+
+        String roleCode = roleRepository.findById(membership.getRoleId())
+                .map(Role::getCode)
+                .orElseThrow(() -> new ApiException(ErrorCode.ACCESS_DENIED));
+
+        String accessToken = tokenProvider.createAccessToken(
+                user.getId(), user.getEmail(), tenant.getId(), roleCode, false);
+        String refreshToken = issueRefreshToken(user.getId(), tenant.getId(), ip, userAgent);
+
+        auditService.record(AuditLog.builder()
+                .actorUserId(user.getId())
+                .actorRole(roleCode)
+                .action("LOGIN_SUCCESS")
+                .resourceType("USER_ACCOUNT")
+                .resourceId(String.valueOf(user.getId()))
+                .result(AuditResult.SUCCESS)
+                .message("업체 로그인: " + label)
+                .ipAddress(ip)
+                .userAgent(userAgent)
+                .build());
+
+        return new TokenResponse(accessToken, refreshToken,
+                tokenProvider.getAccessTokenValiditySeconds(), tenant.getId(), roleCode);
+    }
+
+    /** 로그인 전, 업체코드로 가게 이름만 확인한다(자동입력 링크에서 "우리 가게 맞음" 표시용). */
+    @Transactional(readOnly = true)
+    public TenantLookupResponse tenantLookup(String code) {
+        if (code == null || code.isBlank()) {
+            return TenantLookupResponse.notFound();
+        }
+        return tenantRepository.findByCode(code.trim())
+                .filter(t -> t.getStatus() != TenantStatus.CLOSED && !t.isDeleted())
+                .map(t -> TenantLookupResponse.of(t.getName()))
+                .orElseGet(TenantLookupResponse::notFound);
+    }
+
     /** 리프레시 토큰 회전 — 쓴 토큰은 즉시 폐기하고 새 토큰을 발급한다. */
     @Transactional
     public TokenResponse refresh(String rawRefreshToken, String ip, String userAgent) {

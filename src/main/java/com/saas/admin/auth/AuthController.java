@@ -54,6 +54,42 @@ public class AuthController {
     }
 
     @Operation(
+            summary = "업체 로그인 (업체코드 + 아이디 + 비밀번호)",
+            description = """
+                    사장님/직원이 **업체코드 + 로그인 아이디 + 비밀번호**로 한 번에 로그인한다.
+                    업체코드가 가게를 특정하므로 별도의 업체 선택 단계 없이
+                    바로 `tenantId` + `roleCode` 가 담긴 토큰을 돌려준다.
+
+                    아이디는 '가게 안에서만' 유일하다. 업체코드/아이디/비밀번호가 하나라도
+                    틀리면 어느 것이 틀렸는지 구분해 알려주지 않는다(INVALID_CREDENTIALS).
+                    """)
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "로그인 성공"),
+            @ApiResponse(responseCode = "401", description = "업체코드/아이디/비밀번호 불일치(INVALID_CREDENTIALS) 또는 계정 잠김(ACCOUNT_LOCKED)", content = @io.swagger.v3.oas.annotations.media.Content),
+            @ApiResponse(responseCode = "403", description = "사용할 수 없는 계정/소속(ACCOUNT_DISABLED, NOT_A_MEMBER)", content = @io.swagger.v3.oas.annotations.media.Content)
+    })
+    @SecurityRequirements  // 인증 불필요
+    @PostMapping("/tenant-login")
+    public ResponseEntity<TokenResponse> tenantLogin(@Valid @RequestBody TenantLoginRequest request,
+                                                     HttpServletRequest servletRequest) {
+        return ResponseEntity.ok(authService.tenantLogin(
+                request.tenantCode(),
+                request.loginId(),
+                request.password(),
+                AuditService.clientIp(servletRequest),
+                AuditService.userAgent(servletRequest)));
+    }
+
+    @Operation(
+            summary = "업체코드로 가게 이름 확인 (로그인 전, 공개)",
+            description = "자동입력 로그인 링크에서 '우리 가게가 맞는지' 이름을 보여주기 위한 공개 조회. 코드가 유효하지 않으면 found=false 만 돌려준다.")
+    @SecurityRequirements  // 인증 불필요
+    @GetMapping("/tenant-lookup")
+    public ResponseEntity<TenantLookupResponse> tenantLookup(@RequestParam("code") String code) {
+        return ResponseEntity.ok(authService.tenantLookup(code));
+    }
+
+    @Operation(
             summary = "업체 선택 → 테넌트 컨텍스트 토큰 재발급",
             description = """
                     로그인 응답의 `memberships` 중 하나를 골라 호출한다.

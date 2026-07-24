@@ -94,6 +94,46 @@ public class FileUploadService {
         return url;
     }
 
+    /**
+     * 외부 URL(검색으로 고른 이미지)을 내려받아 S3 에 올리고 CDN URL 을 돌려준다.
+     * S3 가 꺼져 있으면 원본 URL 을 그대로 돌려준다(폴백).
+     */
+    public String uploadFromUrl(String sourceUrl) {
+        if (sourceUrl == null || sourceUrl.isBlank()) {
+            throw new ApiException(ErrorCode.FILE_EMPTY);
+        }
+        if (!isEnabled()) {
+            return sourceUrl; // 저장소 없으면 원본 링크 그대로 사용
+        }
+        try {
+            java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
+                    .followRedirects(java.net.http.HttpClient.Redirect.NORMAL).build();
+            java.net.http.HttpResponse<byte[]> res = client.send(
+                    java.net.http.HttpRequest.newBuilder(java.net.URI.create(sourceUrl)).GET().build(),
+                    java.net.http.HttpResponse.BodyHandlers.ofByteArray());
+            if (res.statusCode() != 200) {
+                throw new ApiException(ErrorCode.FILE_UPLOAD_FAILED);
+            }
+            String contentType = res.headers().firstValue("content-type").orElse("image/jpeg");
+            if (!ALLOWED_CONTENT_TYPES.contains(contentType)) contentType = "image/jpeg";
+            byte[] bytes = res.body();
+            if (bytes.length == 0) throw new ApiException(ErrorCode.FILE_EMPTY);
+            if (bytes.length > MAX_IMAGE_SIZE) throw new ApiException(ErrorCode.FILE_TOO_LARGE);
+
+            String key = buildKey(sourceUrl, contentType);
+            s3Client.putObject(PutObjectRequest.builder().bucket(bucket).key(key).contentType(contentType).build(),
+                    RequestBody.fromBytes(bytes));
+            String url = cdnUrl + "/" + key;
+            log.info("URL 이미지 저장 완료: {} ({} bytes) -> {}", sourceUrl, bytes.length, url);
+            return url;
+        } catch (ApiException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("URL 이미지 저장 실패: {}", e.getMessage(), e);
+            throw new ApiException(ErrorCode.FILE_UPLOAD_FAILED);
+        }
+    }
+
     /** {prefix}/notices/images/{yyyy}/{MM}/{UUID}.{ext} */
     private String buildKey(String originalFilename, String contentType) {
         String ext = extensionOf(originalFilename, contentType);

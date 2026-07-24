@@ -41,8 +41,11 @@ public class CodeBootstrap implements ApplicationRunner {
                 List.of("STAFF:사원", "SENIOR:대리", "MANAGER:과장", "DEPUTY:차장", "GENERAL:부장"));
         seed("JOB_TITLE", "직책", "보직 — 없을 수 있다",
                 List.of("PART_LEAD:파트장", "TEAM_LEAD:팀장", "DIRECTOR:실장"));
+        // 영업장 테이블 좌석수 선택지. 편집기의 좌석 콤보박스가 여기서 온다(직접입력도 가능).
+        seed("TABLE_SEATS", "테이블 좌석수", "영업장 테이블 배치의 좌석수 선택지",
+                List.of("2:2인", "4:4인", "6:6인", "8:8인"));
 
-        log.info("[부트스트랩] 기본 공통코드를 생성했다. (부서/직급/직책 3그룹)");
+        log.info("[부트스트랩] 기본 공통코드를 생성했다. (부서/직급/직책/좌석수 4그룹)");
     }
 
     private void seed(String groupCode, String name, String description, List<String> codes) {

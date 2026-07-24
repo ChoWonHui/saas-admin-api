@@ -33,6 +33,11 @@ public class UserAccount {
     @Column(name = "email", nullable = false, length = 150)
     private String email;
 
+    // 업체(테넌트) 로그인 아이디. 전역이 아니라 '가게 안에서만' 유일하다.
+    // 플랫폼 관리자는 사번으로 로그인하므로 이 값이 없을 수 있어 nullable 로 둔다.
+    @Column(name = "login_id", length = 50)
+    private String loginId;
+
     @Column(name = "password_hash", nullable = false, length = 100)
     private String passwordHash;
 
@@ -73,8 +78,9 @@ public class UserAccount {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    private UserAccount(String email, String passwordHash, String name, String phone, boolean platformAdmin) {
+    private UserAccount(String email, String loginId, String passwordHash, String name, String phone, boolean platformAdmin) {
         this.email = email;
+        this.loginId = loginId;
         this.passwordHash = passwordHash;
         this.name = name;
         this.phone = phone;
@@ -85,11 +91,31 @@ public class UserAccount {
     }
 
     public static UserAccount createPlatformAdmin(String email, String passwordHash, String name) {
-        return new UserAccount(email, passwordHash, name, null, true);
+        return new UserAccount(email, null, passwordHash, name, null, true);
     }
 
-    public static UserAccount createTenantUser(String email, String passwordHash, String name, String phone) {
-        return new UserAccount(email, passwordHash, name, phone, false);
+    public static UserAccount createTenantUser(String email, String loginId, String passwordHash, String name, String phone) {
+        return new UserAccount(email, loginId, passwordHash, name, phone, false);
+    }
+
+    /** 로그인 아이디 변경(수정 화면용). */
+    public void changeLoginId(String loginId) {
+        if (loginId != null && !loginId.isBlank()) this.loginId = loginId.trim();
+    }
+
+    /** 직원 정보 수정(이름·연락처). */
+    public void updateProfile(String name, String phone) {
+        if (name != null && !name.isBlank()) this.name = name;
+        this.phone = (phone == null || phone.isBlank()) ? null : phone;
+    }
+
+    /** 비밀번호 재설정. 잠금·실패횟수도 함께 초기화한다. */
+    public void changePassword(String passwordHash) {
+        this.passwordHash = passwordHash;
+        this.passwordChangedAt = LocalDateTime.now();
+        this.loginFailCount = 0;
+        this.lockedUntil = null;
+        if (this.status == UserStatus.LOCKED) this.status = UserStatus.ACTIVE;
     }
 
     /** 잠금 시간이 지났으면 스스로 풀린다. */

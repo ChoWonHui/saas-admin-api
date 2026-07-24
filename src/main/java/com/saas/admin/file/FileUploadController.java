@@ -36,4 +36,10 @@ public class FileUploadController {
         String url = fileUploadService.upload(file);
         return ResponseEntity.ok(Map.of("url", url));
     }
+
+    @Operation(summary = "URL 이미지 저장", description = "외부 이미지 URL(검색 결과 등)을 내려받아 S3 에 저장하고 CDN URL 을 반환한다.")
+    @org.springframework.web.bind.annotation.PostMapping("/from-url")
+    public ResponseEntity<Map<String, String>> fromUrl(@org.springframework.web.bind.annotation.RequestBody Map<String, String> body) {
+        return ResponseEntity.ok(Map.of("url", fileUploadService.uploadFromUrl(body.get("url"))));
+    }
 }

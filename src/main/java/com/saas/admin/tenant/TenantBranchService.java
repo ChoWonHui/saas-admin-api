@@ -79,6 +79,15 @@ public class TenantBranchService {
         branch.markDeleted();
     }
 
+    /** 이 업체(기본 지점)가 손님 포장 주문을 받는가. 손님 포장 화면·주문 접수의 게이트. */
+    @Transactional
+    public boolean takeoutAvailable(Long tenantId) {
+        Long branchId = defaultBranchId(tenantId);
+        return branchRepository.findById(branchId)
+                .map(TenantBranch::takeoutAvailable)
+                .orElse(false);
+    }
+
     // ===== 영업장 테이블 배치 =====
 
     /** 지점의 배치도(포장전문점 여부·층수·테이블 목록)를 반환. */
@@ -91,7 +100,7 @@ public class TenantBranchService {
         // 컬럼 추가 이전 행은 0 일 수 있어 기본값으로 보정한다.
         int cw = branch.getCanvasW() > 0 ? branch.getCanvasW() : 760;
         int ch = branch.getCanvasH() > 0 ? branch.getCanvasH() : 460;
-        return new LayoutResponse(branch.isTakeoutOnly(), branch.getFloorCount(), cw, ch, tables);
+        return new LayoutResponse(branch.isTakeoutOnly(), branch.isTakeoutEnabled(), branch.getFloorCount(), cw, ch, tables);
     }
 
     /**
@@ -103,7 +112,7 @@ public class TenantBranchService {
         TenantBranch branch = findOrThrow(tenantId, branchId);
         boolean takeout = req.takeoutOnly();
         int floors = Math.max(1, req.floorCount());
-        branch.updateLayoutMeta(takeout, floors, req.canvasW(), req.canvasH());
+        branch.updateLayoutMeta(takeout, req.takeoutEnabled(), floors, req.canvasW(), req.canvasH());
 
         // code 기준 upsert — 이미 있는 테이블은 위치만 갱신(코드·id 유지 → QR 계속 유효),
         // 없어진 테이블은 삭제, 새 테이블은 삽입. 포장전문점이면 전부 삭제.

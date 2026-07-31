@@ -5,7 +5,7 @@ import jakarta.validation.constraints.*;
 
 /**
  * 업체 등록 요청. 업체와 대표 계정을 한 번에 만든다. (설계안 §14 — 플랫폼 관리자 MVP)
- * slug 는 형식 규칙과 예약어 블랙리스트를 서비스에서 다시 검증한다.
+ * 업체코드는 서버가 발급한다.
  */
 public record CreateTenantRequest(
 
@@ -13,17 +13,6 @@ public record CreateTenantRequest(
         @NotBlank(message = "업체명은 필수입니다.")
         @Size(max = 100, message = "업체명은 100자를 넘을 수 없습니다.")
         String tenantName,
-
-        @Schema(
-                description = """
-                        URL 경로로 쓰인다 (`https://.../{tenantSlug}`).
-                        영소문자·숫자·하이픈만, 3~30자. 하이픈으로 시작·종료하거나 연속(`--`)될 수 없다.
-                        한글은 쓸 수 없고, `admin`·`api` 같은 예약어 37건도 막힌다.
-                        """,
-                example = "delicious")
-        @NotBlank(message = "경로(slug)는 필수입니다.")
-        @Size(min = 3, max = 30, message = "경로는 3~30자여야 합니다.")
-        String tenantSlug,
 
         @Schema(description = "요금제 ID (1=FREE, 2=BASIC, 3=PRO)", example = "2")
         @NotNull(message = "요금제는 필수입니다.")
@@ -34,6 +23,9 @@ public record CreateTenantRequest(
 
         @Schema(description = "사업자등록번호", example = "123-45-67890")
         @Size(max = 20) String businessNo,
+
+        @Schema(description = "통신판매업 신고번호", example = "2026-서울강남-01234")
+        @Size(max = 30) String mailOrderSalesNo,
 
         @Schema(description = "업체 연락처", example = "02-1234-5678")
         @Size(max = 20) String contactPhone,

@@ -10,11 +10,7 @@ import java.util.Optional;
 
 public interface TenantRepository extends JpaRepository<Tenant, Long> {
 
-    boolean existsBySlug(String slug);
-
     boolean existsByCode(String code);
-
-    Optional<Tenant> findBySlug(String slug);
 
     Optional<Tenant> findByCode(String code);
 

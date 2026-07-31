@@ -129,7 +129,14 @@ image-search:
 # 테이블 QR 주문 URL 의 앞부분. QR 은 이 값 + "/order/{테이블코드}" 를 인코딩한다.
 # 손님이 스캔하면 이 주소의 주문 화면으로 간다(고객 주문 앱은 별도).
 order:
-  base-url: ${ORDER_BASE_URL:http://localhost:5173}
+  # 손님 테이블 주문 앱(saas-client-web) 호스트. QR = base-url + /업체코드/테이블코드.
+  # dev 는 손님앱 포트(5175). 운영에선 ORDER_BASE_URL 로 손님앱 도메인을 지정한다.
+  base-url: ${ORDER_BASE_URL:http://localhost:5175}
+
+# 결제 게이트웨이 선택. 지금은 mock(모의결제, 항상 승인)만 있다.
+# 실제 PG 연동 시 PaymentGateway 구현을 추가하고 이 값을 바꾸면 그 구현이 주입된다(예: toss).
+payment:
+  gateway: ${PAYMENT_GATEWAY:mock}
 
 logging:
   level:

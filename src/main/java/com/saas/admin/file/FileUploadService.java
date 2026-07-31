@@ -11,6 +11,12 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
+import javax.imageio.ImageIO;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -37,6 +43,9 @@ public class FileUploadService {
     /** 이미지 1장 최대 크기(5MB). multipart.max-file-size 와 맞춰 둔다. */
     private static final long MAX_IMAGE_SIZE = 5L * 1024 * 1024;
 
+    /** 저장 이미지의 최대 가로·세로(px). 이보다 크면 비율을 유지하며 이 안으로 줄여 저장한다. */
+    private static final int MAX_IMAGE_DIMENSION = 1600;
+
     @Value("${storage.s3.bucket:}")
     private String bucket;
 
@@ -50,8 +59,21 @@ public class FileUploadService {
     @Autowired(required = false)
     private S3Client s3Client;
 
+    /** S3 폴백용 DB 이미지 저장소(가게꾸미기 이미지와 공용). */
+    @Autowired
+    private com.saas.admin.decorate.repository.DecorateImageRepository decorateImageRepository;
+
     public boolean isEnabled() {
         return s3Client != null && bucket != null && !bucket.isBlank();
+    }
+
+    /** S3 없이 이미지 바이트를 DB 에 저장하고 공개 URL 을 돌려준다. */
+    private String storeToDb(byte[] bytes, String contentType, String name) {
+        com.saas.admin.decorate.domain.DecorateImage img =
+                decorateImageRepository.save(com.saas.admin.decorate.domain.DecorateImage.create(contentType, bytes));
+        String url = "/api/public/decorate/images/" + img.getId();
+        log.info("이미지 DB 저장(S3 미사용): {} ({} bytes) -> {}", name, bytes.length, url);
+        return url;
     }
 
     /**
@@ -61,9 +83,6 @@ public class FileUploadService {
      *                      FILE_TOO_LARGE / FILE_UPLOAD_FAILED
      */
     public String upload(MultipartFile file) {
-        if (!isEnabled()) {
-            throw new ApiException(ErrorCode.FILE_STORAGE_DISABLED);
-        }
         if (file == null || file.isEmpty()) {
             throw new ApiException(ErrorCode.FILE_EMPTY);
         }
@@ -75,6 +94,20 @@ public class FileUploadService {
             throw new ApiException(ErrorCode.FILE_TOO_LARGE);
         }
 
+        byte[] bytes;
+        try {
+            bytes = file.getBytes();
+        } catch (IOException e) {
+            throw new ApiException(ErrorCode.FILE_UPLOAD_FAILED);
+        }
+        // 최대 가로·세로를 넘으면 비율을 유지하며 줄인다.
+        bytes = resizeIfNeeded(bytes, contentType);
+
+        // S3 가 꺼져 있으면 DB 이미지 저장소로 폴백한다(가게꾸미기 이미지와 동일하게 /api/public/decorate/images 로 서빙).
+        if (!isEnabled()) {
+            return storeToDb(bytes, contentType, file.getOriginalFilename());
+        }
+
         String key = buildKey(file.getOriginalFilename(), contentType);
         try {
             PutObjectRequest request = PutObjectRequest.builder()
@@ -82,16 +115,58 @@ public class FileUploadService {
                     .key(key)
                     .contentType(contentType)
                     .build();
-            s3Client.putObject(request, RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
-        } catch (IOException e) {
+            s3Client.putObject(request, RequestBody.fromBytes(bytes));
+        } catch (Exception e) {
             log.error("S3 이미지 업로드 실패: {}", e.getMessage(), e);
             throw new ApiException(ErrorCode.FILE_UPLOAD_FAILED);
         }
 
         String url = cdnUrl + "/" + key;
-        log.info("공지 이미지 업로드 완료: {} ({} bytes) -> {}",
-                file.getOriginalFilename(), file.getSize(), url);
+        log.info("이미지 업로드 완료: {} ({} bytes) -> {}",
+                file.getOriginalFilename(), bytes.length, url);
         return url;
+    }
+
+    /**
+     * 이미지가 최대 가로·세로({@link #MAX_IMAGE_DIMENSION})를 넘으면 비율을 유지하며 그 안으로 줄인다.
+     * JPEG/PNG 만 처리하고, ImageIO 로 못 읽는 형식(webp 등)·GIF(애니메이션)는 원본을 그대로 둔다.
+     * 실패해도 원본 바이트를 돌려줘 업로드가 끊기지 않게 한다.
+     */
+    private byte[] resizeIfNeeded(byte[] data, String contentType) {
+        boolean jpeg = "image/jpeg".equals(contentType);
+        boolean png = "image/png".equals(contentType);
+        if (!jpeg && !png) {
+            return data; // gif/webp 등은 그대로
+        }
+        try {
+            BufferedImage src = ImageIO.read(new ByteArrayInputStream(data));
+            if (src == null) {
+                return data;
+            }
+            int w = src.getWidth();
+            int h = src.getHeight();
+            if (w <= MAX_IMAGE_DIMENSION && h <= MAX_IMAGE_DIMENSION) {
+                return data; // 이미 작음
+            }
+            double scale = Math.min((double) MAX_IMAGE_DIMENSION / w, (double) MAX_IMAGE_DIMENSION / h);
+            int nw = Math.max(1, (int) Math.round(w * scale));
+            int nh = Math.max(1, (int) Math.round(h * scale));
+            BufferedImage dst = new BufferedImage(nw, nh, png ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = dst.createGraphics();
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g.drawImage(src, 0, 0, nw, nh, null);
+            g.dispose();
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            ImageIO.write(dst, png ? "png" : "jpeg", out);
+            byte[] resized = out.toByteArray();
+            log.info("이미지 축소: {}x{} -> {}x{} ({} -> {} bytes)", w, h, nw, nh, data.length, resized.length);
+            return resized.length > 0 ? resized : data;
+        } catch (Exception e) {
+            log.warn("이미지 축소 실패(원본 유지): {}", e.getMessage());
+            return data;
+        }
     }
 
     /**

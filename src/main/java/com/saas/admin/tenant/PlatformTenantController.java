@@ -50,22 +50,14 @@ public class PlatformTenantController {
                     업체는 `PENDING` 상태로 만들어진다. 고객 화면에 노출하려면
                     `/activate` 를 따로 호출해 개설해야 한다.
 
-                    ### slug 검증 (등록 시점에 3중으로 막는다)
-
-                    | 상황 | 응답 |
-                    |---|---|
-                    | 형식 위반 — 한글, 연속 하이픈(`--`), 3자 미만, 하이픈으로 시작·종료 | `400 SLUG_INVALID_FORMAT` |
-                    | 예약어 — `admin`, `api`, `login` 등 37건 | `409 SLUG_RESERVED` |
-                    | 이미 사용 중 | `409 SLUG_DUPLICATED` |
-
-                    slug 는 소문자로 정규화된다. 업체명(`tenantName`)은 한글을 써도 된다.
+                    업체코드는 서버가 랜덤 10자리로 발급한다. 업체명(`tenantName`)은 한글을 써도 된다.
                     """)
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "등록 성공"),
-            @ApiResponse(responseCode = "400", description = "입력값 오류 또는 slug 형식 위반", content = @Content),
+            @ApiResponse(responseCode = "400", description = "입력값 오류", content = @Content),
             @ApiResponse(responseCode = "403", description = "플랫폼 관리자가 아님", content = @Content),
             @ApiResponse(responseCode = "404", description = "요금제 없음(PLAN_NOT_FOUND)", content = @Content),
-            @ApiResponse(responseCode = "409", description = "slug 예약어/중복 또는 이메일 중복(EMAIL_DUPLICATED)", content = @Content)
+            @ApiResponse(responseCode = "409", description = "이메일 중복(EMAIL_DUPLICATED)", content = @Content)
     })
     @PostMapping("/with-owner")
     public ResponseEntity<CreateTenantResponse> register(@AuthenticationPrincipal AuthPrincipal principal,
@@ -109,7 +101,7 @@ public class PlatformTenantController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @Operation(summary = "업체 수정", description = "업체명·요금제·대표자·연락처·주소 등을 수정한다. slug·상태는 바꾸지 않는다.")
+    @Operation(summary = "업체 수정", description = "업체명·요금제·대표자·연락처·주소 등을 수정한다. 코드·상태는 바꾸지 않는다.")
     @PatchMapping("/{tenantId}")
     public ResponseEntity<TenantResponse> update(@AuthenticationPrincipal AuthPrincipal principal,
                                                  @PathVariable Long tenantId,
@@ -196,6 +188,17 @@ public class PlatformTenantController {
         // 손님 주문 화면이 업체·테이블을 한 번에 식별할 수 있다.
         String tenantCode = tenantService.get(tenantId).tenantCode();
         String url = orderBaseUrl + "/" + tenantCode + "/" + table.getCode();
+        return ResponseEntity.ok()
+                .contentType(org.springframework.http.MediaType.IMAGE_PNG)
+                .body(QrGenerator.png(url, 360));
+    }
+
+    @Operation(summary = "포장 주문 QR 이미지", description = "이 업체의 포장 주문 URL 을 담은 QR PNG. (order.base-url + /{업체코드}/takeout)")
+    @GetMapping(value = "/{tenantId}/branches/{branchId}/takeout-qr",
+            produces = org.springframework.http.MediaType.IMAGE_PNG_VALUE)
+    public ResponseEntity<byte[]> takeoutQr(@PathVariable Long tenantId, @PathVariable Long branchId) {
+        String tenantCode = tenantService.get(tenantId).tenantCode();
+        String url = orderBaseUrl + "/" + tenantCode + "/takeout";
         return ResponseEntity.ok()
                 .contentType(org.springframework.http.MediaType.IMAGE_PNG)
                 .body(QrGenerator.png(url, 360));

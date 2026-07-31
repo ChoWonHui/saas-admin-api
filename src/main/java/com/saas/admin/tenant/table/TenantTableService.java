@@ -94,6 +94,15 @@ public class TenantTableService {
         return orderBaseUrl + "/" + tenantCode + "/" + t.getCode();
     }
 
+    /** 포장 전용 QR URL — 내URL/업체코드/takeout. 가게 단위(테이블코드 대신 고정 경로). */
+    @Transactional(readOnly = true)
+    public String takeoutOrderUrl(Long tenantId, String orderBaseUrl) {
+        String tenantCode = tenantRepository.findById(tenantId)
+                .map(Tenant::getCode)
+                .orElseThrow(() -> new ApiException(ErrorCode.TENANT_NOT_FOUND));
+        return orderBaseUrl + "/" + tenantCode + "/takeout";
+    }
+
     // ===== 내부 =====
 
     /** 이 테이블이 정말 이 업체(기본 지점) 소유인지 확인하고 반환. */

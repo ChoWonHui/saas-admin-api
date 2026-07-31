@@ -60,4 +60,8 @@ public final class MenuDtos {
 
     public record CopyMenuRequest(Long fromBranchId) {
     }
+
+    /** 품절 토글 요청(주문관리 화면). */
+    public record SoldOutRequest(boolean soldOut) {
+    }
 }

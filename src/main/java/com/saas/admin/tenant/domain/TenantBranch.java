@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 /**
  * 업체의 지점(호점). 한 업체(테넌트) 아래 1호점·2호점… 으로 늘어난다.
  * <p>
- * 호점 번호({@code branchNo})는 업체별로 자동 채번한다(기존 최댓값 + 1). 지점은 자체 slug 를 갖지 않고
+ * 호점 번호({@code branchNo})는 업체별로 자동 채번한다(기존 최댓값 + 1). 지점은
  * 이름·주소·연락처만 관리한다. 삭제는 삭제여부('Y')로 한다(업체와 동일한 소프트삭제).
  * tenantId 는 FK 를 걸지 않고 Long 으로 둔다 — 다른 도메인과의 느슨한 결합(org/tenant 패턴).
  */
@@ -57,6 +57,10 @@ public class TenantBranch {
     @Column(name = "takeout_only", nullable = false, length = 1)
     private String takeoutOnly;
 
+    /** 포장 주문 받기(홀+포장 병행). 'Y' 면 포장 전용 QR 로 손님 포장주문을 받는다. */
+    @Column(name = "takeout_enabled", nullable = false, length = 1, columnDefinition = "CHAR(1) NOT NULL DEFAULT 'N'")
+    private String takeoutEnabled;
+
     /** 영업장 층수. 1 이상. 테이블은 각 층 캔버스에 배치된다. */
     @Column(name = "floor_count", nullable = false)
     private int floorCount;
@@ -94,6 +98,7 @@ public class TenantBranch {
         b.address = blankToNull(address);
         b.addressDetail = blankToNull(addressDetail);
         b.takeoutOnly = "N";
+        b.takeoutEnabled = "N";
         b.floorCount = 1;
         b.canvasW = 760;
         b.canvasH = 460;
@@ -101,9 +106,10 @@ public class TenantBranch {
         return b;
     }
 
-    /** 영업장 배치 메타(포장전문점 여부·층수·캔버스 크기)를 갱신한다. */
-    public void updateLayoutMeta(boolean takeoutOnly, int floorCount, int canvasW, int canvasH) {
+    /** 영업장 배치 메타(포장전문점 여부·포장가능·층수·캔버스 크기)를 갱신한다. */
+    public void updateLayoutMeta(boolean takeoutOnly, boolean takeoutEnabled, int floorCount, int canvasW, int canvasH) {
         this.takeoutOnly = takeoutOnly ? "Y" : "N";
+        this.takeoutEnabled = takeoutEnabled ? "Y" : "N";
         this.floorCount = Math.max(1, floorCount);
         this.canvasW = clamp(canvasW, 400, 2000, 760);
         this.canvasH = clamp(canvasH, 300, 1600, 460);
@@ -116,6 +122,15 @@ public class TenantBranch {
 
     public boolean isTakeoutOnly() {
         return "Y".equals(takeoutOnly);
+    }
+
+    public boolean isTakeoutEnabled() {
+        return "Y".equals(takeoutEnabled);
+    }
+
+    /** 손님이 포장 주문을 넣을 수 있는가 — 포장 전문점이거나 포장 받기를 켠 경우. */
+    public boolean takeoutAvailable() {
+        return isTakeoutOnly() || isTakeoutEnabled();
     }
 
     public void update(String name, String managerName, String contactPhone,

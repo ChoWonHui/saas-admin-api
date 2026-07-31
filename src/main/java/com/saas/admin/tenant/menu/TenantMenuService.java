@@ -114,6 +114,15 @@ public class TenantMenuService {
         return new MenuResponse(buildTree(branchId));
     }
 
+    /** 품절 상태만 토글(주문관리 화면의 빠른 품절 처리). 손님 메뉴판에 즉시 반영된다. */
+    @Transactional
+    public MenuResponse setItemSoldOut(Long tenantId, Long branchId, Long itemId, boolean soldOut) {
+        assertBranch(tenantId, branchId);
+        MenuItem item = item(branchId, itemId);
+        item.setSoldOut(soldOut);
+        return new MenuResponse(buildTree(branchId));
+    }
+
     @Transactional
     public MenuResponse deleteItem(Long tenantId, Long branchId, Long itemId) {
         assertBranch(tenantId, branchId);

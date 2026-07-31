@@ -4,7 +4,6 @@ package com.saas.admin.auth.dto;
 public record MembershipResponse(
         Long tenantId,
         String tenantName,
-        String tenantSlug,
         String tenantStatus,
         String roleCode
 ) {

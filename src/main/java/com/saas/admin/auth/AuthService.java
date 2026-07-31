@@ -302,7 +302,6 @@ public class AuthService {
                     return new MembershipResponse(
                             tenant.getId(),
                             tenant.getName(),
-                            tenant.getSlug(),
                             tenant.getStatus().name(),
                             role == null ? null : role.getCode());
                 })

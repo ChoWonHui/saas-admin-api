@@ -11,4 +11,6 @@ public interface AdminMenuRepository extends JpaRepository<AdminMenu, Long> {
     List<AdminMenu> findAllByOrderBySortOrderAscIdAsc();
 
     boolean existsByParentId(Long parentId);
+
+    boolean existsByUrl(String url);
 }

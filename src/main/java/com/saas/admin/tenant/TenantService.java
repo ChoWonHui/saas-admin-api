@@ -26,7 +26,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 @Slf4j
@@ -36,7 +35,6 @@ public class TenantService {
 
     private final TenantRepository tenantRepository;
     private final TenantBranchRepository branchRepository;
-    private final ReservedSlugRepository reservedSlugRepository;
     private final TenantPlanRepository tenantPlanRepository;
     private final TenantSubscriptionRepository subscriptionRepository;
     private final UserAccountRepository userAccountRepository;
@@ -50,10 +48,6 @@ public class TenantService {
      */
     @Transactional
     public CreateTenantResponse register(CreateTenantRequest request, Long actorId, String ip, String userAgent) {
-        String slug = normalizeSlug(request.tenantSlug());
-
-        validateSlug(slug);
-
         if (userAccountRepository.existsByEmail(request.ownerEmail())) {
             throw new ApiException(ErrorCode.EMAIL_DUPLICATED);
         }
@@ -64,10 +58,10 @@ public class TenantService {
         Tenant tenant = tenantRepository.save(Tenant.register(
                 nextTenantCode(),
                 request.tenantName(),
-                slug,
                 plan.getId(),
                 request.ownerName(),
                 request.businessNo(),
+                request.mailOrderSalesNo(),
                 request.contactPhone(),
                 request.contactEmail(),
                 actorId));
@@ -96,7 +90,7 @@ public class TenantService {
                 .resourceType("TENANT")
                 .resourceId(String.valueOf(tenant.getId()))
                 .result(AuditResult.SUCCESS)
-                .message("slug=" + slug + ", plan=" + plan.getCode())
+                .message("code=" + tenant.getCode() + ", plan=" + plan.getCode())
                 .ipAddress(ip)
                 .userAgent(userAgent)
                 .build());
@@ -104,7 +98,6 @@ public class TenantService {
         return new CreateTenantResponse(
                 tenant.getId(),
                 tenant.getCode(),
-                tenant.getSlug(),
                 tenant.getStatus().name(),
                 owner.getId(),
                 owner.getEmail());
@@ -116,9 +109,6 @@ public class TenantService {
      */
     @Transactional
     public TenantResponse create(TenantCreateRequest request, Long actorId, String ip, String userAgent) {
-        String slug = normalizeSlug(request.tenantSlug());
-        validateSlug(slug);
-
         Long planId = null;
         if (request.planId() != null) {
             tenantPlanRepository.findById(request.planId())
@@ -129,10 +119,10 @@ public class TenantService {
         Tenant tenant = tenantRepository.save(Tenant.create(
                 nextTenantCode(),
                 request.tenantName(),
-                slug,
                 planId,
                 request.ownerName(),
                 request.businessNo(),
+                request.mailOrderSalesNo(),
                 request.contactPhone(),
                 request.contactEmail(),
                 request.postalCode(),
@@ -140,30 +130,21 @@ public class TenantService {
                 request.addressDetail(),
                 actorId));
 
-        audit(tenant, actorId, "TENANT_CREATE", "slug=" + slug, ip, userAgent);
+        audit(tenant, actorId, "TENANT_CREATE", "code=" + tenant.getCode(), ip, userAgent);
         return TenantResponse.from(tenant);
     }
 
-    /** 업체 정보 수정. slug 는 바꿀 수 있고(검증), code·status 는 바꾸지 않는다. */
+    /** 업체 정보 수정. code·status 는 바꾸지 않는다(개설/중지는 별도). */
     @Transactional
     public TenantResponse update(Long tenantId, TenantUpdateRequest request, Long actorId, String ip, String userAgent) {
         Tenant tenant = findOrThrow(tenantId);
-
-        // slug 변경 요청이 있고 실제로 달라졌을 때만 검증 후 변경한다.
-        if (request.tenantSlug() != null && !request.tenantSlug().isBlank()) {
-            String newSlug = normalizeSlug(request.tenantSlug());
-            if (!newSlug.equals(tenant.getSlug())) {
-                validateSlug(newSlug); // 형식 + 예약어 + 중복(다른 업체)
-                tenant.changeSlug(newSlug);
-            }
-        }
 
         if (request.planId() != null) {
             tenantPlanRepository.findById(request.planId())
                     .orElseThrow(() -> new ApiException(ErrorCode.PLAN_NOT_FOUND));
         }
         tenant.update(request.tenantName(), request.planId(), request.ownerName(), request.businessNo(),
-                request.contactPhone(), request.contactEmail(), request.postalCode(),
+                request.mailOrderSalesNo(), request.contactPhone(), request.contactEmail(), request.postalCode(),
                 request.address(), request.addressDetail(), actorId);
         audit(tenant, actorId, "TENANT_UPDATE", null, ip, userAgent);
         return TenantResponse.from(tenant);
@@ -261,28 +242,6 @@ public class TenantService {
                 .ipAddress(ip)
                 .userAgent(userAgent)
                 .build());
-    }
-
-    /**
-     * slug 검증 (설계안 §2.1, §2.2).
-     * 라우팅이 우연히 동작하는 데 기대지 않고 등록 시점에 막는다.
-     */
-    private void validateSlug(String slug) {
-        if (!SlugPolicy.isValid(slug)) {
-            throw new ApiException(ErrorCode.SLUG_INVALID_FORMAT,
-                    "경로는 영소문자·숫자·하이픈만 쓸 수 있고 3~30자여야 하며, "
-                            + "하이픈으로 시작·종료하거나 연속될 수 없습니다.");
-        }
-        if (reservedSlugRepository.existsBySlug(slug)) {
-            throw new ApiException(ErrorCode.SLUG_RESERVED);
-        }
-        if (tenantRepository.existsBySlug(slug)) {
-            throw new ApiException(ErrorCode.SLUG_DUPLICATED);
-        }
-    }
-
-    private String normalizeSlug(String raw) {
-        return raw == null ? null : raw.trim().toLowerCase(Locale.ROOT);
     }
 
     /**

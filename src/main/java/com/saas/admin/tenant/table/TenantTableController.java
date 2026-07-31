@@ -77,6 +77,13 @@ public class TenantTableController {
         return ResponseEntity.ok().contentType(MediaType.IMAGE_PNG).body(QrGenerator.png(url, 360));
     }
 
+    @Operation(summary = "포장 주문 QR (내URL/업체코드/takeout)", description = "포장 가능일 때만 붙인다. 스캔하면 포장 주문 화면으로 이동.")
+    @GetMapping(value = "/takeout-qr", produces = MediaType.IMAGE_PNG_VALUE)
+    public ResponseEntity<byte[]> takeoutQr(@AuthenticationPrincipal AuthPrincipal principal) {
+        String url = tableService.takeoutOrderUrl(tenantId(principal), orderBaseUrl);
+        return ResponseEntity.ok().contentType(MediaType.IMAGE_PNG).body(QrGenerator.png(url, 360));
+    }
+
     /** 토큰에 업체(테넌트) 컨텍스트가 있어야 한다. */
     private Long tenantId(AuthPrincipal principal) {
         if (principal == null || principal.isAdmin() || !principal.hasTenantContext()) {

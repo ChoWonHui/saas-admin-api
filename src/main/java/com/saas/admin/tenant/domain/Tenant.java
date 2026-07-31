@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
 
 /**
  * 테넌트(업체) — 모든 업무 데이터의 격리 기준. (001-03 참조)
- * 업체명은 한글을 허용하고, URL 경로로 쓰이는 slug 는 영문으로 따로 둔다. (설계안 §2.1)
+ * 업체명은 한글을 허용한다. 손님 화면 접속은 서버가 발급하는 업체코드(tenant_code)로 한다.
  */
 @Entity
 @Table(name = "tenant")
@@ -38,9 +38,6 @@ public class Tenant {
     @Column(name = "tenant_name", nullable = false, length = 100)
     private String name;
 
-    @Column(name = "tenant_slug", nullable = false, length = 30)
-    private String slug;
-
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "status", nullable = false)
@@ -54,6 +51,10 @@ public class Tenant {
 
     @Column(name = "business_no", length = 20)
     private String businessNo;
+
+    /** 통신판매업 신고번호(온라인 판매 신고). 없을 수 있다. 예: 2026-서울강남-01234 */
+    @Column(name = "mail_order_sales_no", length = 30)
+    private String mailOrderSalesNo;
 
     @Column(name = "contact_phone", length = 20)
     private String contactPhone;
@@ -112,11 +113,10 @@ public class Tenant {
     @Column(name = "updated_by")
     private Long updatedBy;
 
-    private Tenant(String code, String name, String slug, Long planId, String ownerName,
+    private Tenant(String code, String name, Long planId, String ownerName,
                    String businessNo, String contactPhone, String contactEmail, Long createdBy) {
         this.code = code;
         this.name = name;
-        this.slug = slug;
         this.planId = planId;
         this.ownerName = ownerName;
         this.businessNo = businessNo;
@@ -128,16 +128,21 @@ public class Tenant {
         this.deleted = "N";
     }
 
-    public static Tenant register(String code, String name, String slug, Long planId, String ownerName,
-                                  String businessNo, String contactPhone, String contactEmail, Long createdBy) {
-        return new Tenant(code, name, slug, planId, ownerName, businessNo, contactPhone, contactEmail, createdBy);
+    public static Tenant register(String code, String name, Long planId, String ownerName,
+                                  String businessNo, String mailOrderSalesNo,
+                                  String contactPhone, String contactEmail, Long createdBy) {
+        Tenant t = new Tenant(code, name, planId, ownerName, businessNo, contactPhone, contactEmail, createdBy);
+        t.mailOrderSalesNo = blankToNull(mailOrderSalesNo);
+        return t;
     }
 
     /** 업체 정보만 등록(대표 계정 없이). 주소까지 함께 받는다. PENDING 으로 시작. */
-    public static Tenant create(String code, String name, String slug, Long planId, String ownerName,
-                                String businessNo, String contactPhone, String contactEmail,
+    public static Tenant create(String code, String name, Long planId, String ownerName,
+                                String businessNo, String mailOrderSalesNo,
+                                String contactPhone, String contactEmail,
                                 String postalCode, String address, String addressDetail, Long createdBy) {
-        Tenant t = new Tenant(code, name, slug, planId, ownerName, businessNo, contactPhone, contactEmail, createdBy);
+        Tenant t = new Tenant(code, name, planId, ownerName, businessNo, contactPhone, contactEmail, createdBy);
+        t.mailOrderSalesNo = blankToNull(mailOrderSalesNo);
         t.postalCode = postalCode;
         t.address = address;
         t.addressDetail = addressDetail;
@@ -145,27 +150,23 @@ public class Tenant {
     }
 
     /**
-     * 업체 정보 수정. slug·code·status 는 여기서 바꾸지 않는다(개설/중지는 별도, slug 는 URL 이라 불변).
+     * 업체 정보 수정. code·status 는 여기서 바꾸지 않는다(개설/중지는 별도).
      * 선택 항목은 빈 문자열이면 비운다(null). 요금제(planId)는 null 로 해제할 수 있다.
      */
-    public void update(String name, Long planId, String ownerName, String businessNo,
+    public void update(String name, Long planId, String ownerName, String businessNo, String mailOrderSalesNo,
                        String contactPhone, String contactEmail, String postalCode,
                        String address, String addressDetail, Long actorId) {
         if (name != null && !name.isBlank()) this.name = name;
         this.planId = planId;
         this.ownerName = blankToNull(ownerName);
         this.businessNo = blankToNull(businessNo);
+        this.mailOrderSalesNo = blankToNull(mailOrderSalesNo);
         this.contactPhone = blankToNull(contactPhone);
         this.contactEmail = blankToNull(contactEmail);
         this.postalCode = blankToNull(postalCode);
         this.address = blankToNull(address);
         this.addressDetail = blankToNull(addressDetail);
         this.updatedBy = actorId;
-    }
-
-    /** 경로(slug) 변경. 형식·예약어·중복 검증은 서비스에서 끝낸 뒤 호출한다. */
-    public void changeSlug(String slug) {
-        this.slug = slug;
     }
 
     /** 소프트 삭제(삭제여부='Y'). 이미 삭제된 업체는 막는다. */

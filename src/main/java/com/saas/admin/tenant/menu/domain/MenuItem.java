@@ -76,6 +76,11 @@ public class MenuItem {
         return "Y".equals(soldOut);
     }
 
+    /** 품절 상태만 바꾼다(주문관리 화면의 빠른 품절 토글용). */
+    public void setSoldOut(boolean value) {
+        this.soldOut = value ? "Y" : "N";
+    }
+
     private static String blankToNull(String s) {
         return (s == null || s.isBlank()) ? null : s;
     }

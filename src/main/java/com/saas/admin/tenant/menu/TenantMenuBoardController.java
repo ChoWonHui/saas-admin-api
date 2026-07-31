@@ -83,6 +83,14 @@ public class TenantMenuBoardController {
         return ResponseEntity.ok(menuService.deleteItem(tid, branchService.defaultBranchId(tid), itemId));
     }
 
+    @Operation(summary = "메뉴 품절 토글", description = "주문관리 화면에서 빠르게 품절/판매중 전환. 손님 메뉴판에 즉시 반영.")
+    @PatchMapping("/items/{itemId}/soldout")
+    public ResponseEntity<MenuResponse> setSoldOut(@AuthenticationPrincipal AuthPrincipal p,
+                                                   @PathVariable Long itemId, @RequestBody SoldOutRequest req) {
+        long tid = tenantId(p);
+        return ResponseEntity.ok(menuService.setItemSoldOut(tid, branchService.defaultBranchId(tid), itemId, req.soldOut()));
+    }
+
     /** 토큰에 업체(테넌트) 컨텍스트가 있어야 한다. */
     private long tenantId(AuthPrincipal p) {
         if (p == null || p.isAdmin() || !p.hasTenantContext()) {

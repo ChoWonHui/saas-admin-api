@@ -47,6 +47,8 @@ public class SecurityConfig {
                         // 관리자(내부 직원)는 사번으로 여기서 로그인한다. 업체 사용자와 경로가 다르다.
                         .requestMatchers("/api/auth/admin/login", "/api/auth/admin/refresh").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
+                        // 손님(무인증) 테이블 주문 — QR 로 들어온 손님이 메뉴판을 보고 주문을 넣는다.
+                        .requestMatchers("/api/public/**").permitAll()
                         // Swagger UI / OpenAPI 문서.
                         // ⚠️ 운영에서는 열어두면 안 된다. API 구조와 스키마가 그대로 노출된다.
                         //    별도 프로파일에서 springdoc.api-docs.enabled=false 로 끄거나 이 항목을 제거할 것.

@@ -27,12 +27,12 @@ public enum ErrorCode {
     PASSWORD_SAME_AS_DEFAULT(HttpStatus.BAD_REQUEST, "초기 비밀번호와 다른 비밀번호로 변경해야 합니다."),
 
     // 업체(테넌트)
-    SLUG_INVALID_FORMAT(HttpStatus.BAD_REQUEST, "경로(slug) 형식이 올바르지 않습니다."),
-    SLUG_RESERVED(HttpStatus.CONFLICT, "플랫폼이 예약한 경로라 사용할 수 없습니다."),
-    SLUG_DUPLICATED(HttpStatus.CONFLICT, "이미 사용 중인 경로입니다."),
     EMAIL_DUPLICATED(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니다."),
     LOGIN_ID_DUPLICATED(HttpStatus.CONFLICT, "이미 사용 중인 아이디입니다."),
     INQUIRY_NOT_FOUND(HttpStatus.NOT_FOUND, "문의를 찾을 수 없습니다."),
+    ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "주문을 찾을 수 없습니다."),
+    TAKEOUT_STOPPED(HttpStatus.CONFLICT, "현재 포장 주문이 정지되었습니다."),
+    PAYMENT_FAILED(HttpStatus.BAD_REQUEST, "결제에 실패했습니다."),
     TENANT_NOT_FOUND(HttpStatus.NOT_FOUND, "업체를 찾을 수 없습니다."),
     TENANT_ALREADY_DELETED(HttpStatus.CONFLICT, "이미 삭제된 업체입니다."),
     BRANCH_NOT_FOUND(HttpStatus.NOT_FOUND, "지점(호점)을 찾을 수 없습니다."),
@@ -45,6 +45,13 @@ public enum ErrorCode {
     PLAN_NOT_FOUND(HttpStatus.NOT_FOUND, "요금제를 찾을 수 없습니다."),
     TENANT_CODE_GENERATION_FAILED(HttpStatus.CONFLICT, "업체 코드 생성에 실패했습니다. 다시 시도하세요."),
     INVALID_STATUS_TRANSITION(HttpStatus.CONFLICT, "허용되지 않는 상태 전이입니다."),
+    WAITLIST_NOT_FOUND(HttpStatus.NOT_FOUND, "예약/대기 건을 찾을 수 없습니다."),
+    WAITLIST_INVALID_STATUS(HttpStatus.BAD_REQUEST, "상태는 호출·착석·취소 중에서 선택하세요."),
+    WAITLIST_PHONE_REQUIRED(HttpStatus.BAD_REQUEST, "연락처를 입력하세요."),
+    WAITLIST_RESERVED_AT_REQUIRED(HttpStatus.BAD_REQUEST, "예약 일시를 입력하세요."),
+    WAITLIST_TABLE_REQUIRED(HttpStatus.BAD_REQUEST, "예약할 테이블을 선택하세요."),
+    WAITLIST_TABLE_NOT_FOUND(HttpStatus.BAD_REQUEST, "선택한 테이블을 찾을 수 없습니다."),
+    TENANT_MENU_NOT_FOUND(HttpStatus.NOT_FOUND, "메뉴를 찾을 수 없습니다."),
 
     // 콘솔 메뉴
     MENU_NOT_FOUND(HttpStatus.NOT_FOUND, "메뉴를 찾을 수 없습니다."),
@@ -95,6 +102,13 @@ public enum ErrorCode {
     FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "파일 업로드에 실패했습니다."),
     IMAGE_SEARCH_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "이미지 검색이 설정되지 않았습니다."),
     IMAGE_SEARCH_FAILED(HttpStatus.BAD_GATEWAY, "이미지 검색에 실패했습니다."),
+
+    // 가게 꾸미기 카탈로그(store decorate)
+    DECORATE_CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, "분류를 찾을 수 없습니다."),
+    DECORATE_CATEGORY_DUPLICATED(HttpStatus.CONFLICT, "이 대분류에 이미 있는 소분류 키입니다."),
+    DECORATE_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "항목을 찾을 수 없습니다."),
+    DECORATE_ITEM_DUPLICATED(HttpStatus.CONFLICT, "이 분류에 이미 있는 항목 키입니다."),
+    DECORATE_LOCKED(HttpStatus.CONFLICT, "코드로 그려지는 기본 항목이라 삭제할 수 없습니다. 사용 여부(노출)만 바꿀 수 있습니다."),
 
     // 공통
     VALIDATION_FAILED(HttpStatus.BAD_REQUEST, "입력값이 올바르지 않습니다."),

@@ -62,12 +62,14 @@ public final class BranchDtos {
     }
 
     @Schema(description = "지점 영업장 배치 응답.")
-    public record LayoutResponse(boolean takeoutOnly, int floorCount, int canvasW, int canvasH, List<TableDto> tables) {
+    public record LayoutResponse(boolean takeoutOnly, boolean takeoutEnabled,
+                                 int floorCount, int canvasW, int canvasH, List<TableDto> tables) {
     }
 
     @Schema(description = "지점 영업장 배치 저장(통째 교체).")
     public record LayoutSaveRequest(
             boolean takeoutOnly,
+            boolean takeoutEnabled,
             int floorCount,
             int canvasW,
             int canvasH,

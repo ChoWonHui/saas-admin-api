@@ -53,11 +53,11 @@ public final class BranchDtos {
     @Schema(description = "테이블/룸 하나. 좌표·크기는 편집기 캔버스 픽셀. code 는 QR 주문 토큰(불변).")
     public record TableDto(
             Long tableId, String code, int floorNo, String label, int seats, String kind,
-            int x, int y, int width, int height
+            int x, int y, int width, int height, int rotation, boolean active
     ) {
         public static TableDto from(BranchTable t) {
             return new TableDto(t.getId(), t.getCode(), t.getFloorNo(), t.getLabel(), t.getSeats(), t.getKind(),
-                    t.getX(), t.getY(), t.getWidth(), t.getHeight());
+                    t.getX(), t.getY(), t.getWidth(), t.getHeight(), t.rotationOrZero(), t.activeOrTrue());
         }
     }
 
@@ -76,7 +76,7 @@ public final class BranchDtos {
             List<TableSaveDto> tables
     ) {
         public record TableSaveDto(String code, int floorNo, String label, int seats, String kind,
-                                   int x, int y, int width, int height) {
+                                   int x, int y, int width, int height, int rotation, boolean active) {
         }
     }
 }

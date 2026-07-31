@@ -32,6 +32,7 @@ public enum ErrorCode {
     INQUIRY_NOT_FOUND(HttpStatus.NOT_FOUND, "문의를 찾을 수 없습니다."),
     ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "주문을 찾을 수 없습니다."),
     TAKEOUT_STOPPED(HttpStatus.CONFLICT, "현재 포장 주문이 정지되었습니다."),
+    TABLE_DISABLED(HttpStatus.CONFLICT, "현재 사용할 수 없는 테이블입니다. 매장 직원에게 문의해 주세요."),
     PAYMENT_FAILED(HttpStatus.BAD_REQUEST, "결제에 실패했습니다."),
     TENANT_NOT_FOUND(HttpStatus.NOT_FOUND, "업체를 찾을 수 없습니다."),
     TENANT_ALREADY_DELETED(HttpStatus.CONFLICT, "이미 삭제된 업체입니다."),

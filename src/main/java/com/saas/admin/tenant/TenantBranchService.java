@@ -131,10 +131,10 @@ public class TenantBranchService {
                 keep.add(code);
                 BranchTable ex = byCode.get(code);
                 if (ex != null) {
-                    ex.update(floor, t.label(), t.seats(), t.kind(), t.x(), t.y(), t.width(), t.height());
+                    ex.update(floor, t.label(), t.seats(), t.kind(), t.x(), t.y(), t.width(), t.height(), t.rotation(), t.active());
                 } else {
                     tableRepository.save(BranchTable.of(branchId, code, floor, t.label(), t.seats(), t.kind(),
-                            t.x(), t.y(), t.width(), t.height()));
+                            t.x(), t.y(), t.width(), t.height(), t.rotation(), t.active()));
                 }
             }
             existing.stream().filter((e) -> !keep.contains(e.getCode())).forEach(tableRepository::delete);

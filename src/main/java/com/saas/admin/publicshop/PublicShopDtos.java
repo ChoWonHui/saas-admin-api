@@ -17,7 +17,7 @@ public final class PublicShopDtos {
 
     /** QR 진입 시 화면 상단에 표시할 가게/테이블 정보. */
     public record ShopTableView(String shopName, String tenantCode,
-                                Long tableId, String tableCode, String tableLabel, int seats) {
+                                Long tableId, String tableCode, String tableLabel, int seats, boolean active) {
     }
 
     /** 포장 QR 진입 시 — 가게명 + 현재 포장주문을 받는지 여부(false 면 '정지' 화면). */

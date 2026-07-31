@@ -74,7 +74,7 @@ public class TenantTableService {
                 ? (n + 1) + "번" : req.label().trim();
 
         BranchTable t = tableRepository.save(BranchTable.of(
-                branchId, UUID.randomUUID().toString(), 1, label, seats, kind, x, y, wh[0], wh[1]));
+                branchId, UUID.randomUUID().toString(), 1, label, seats, kind, x, y, wh[0], wh[1], 0, true));
         return TableView.from(t);
     }
 

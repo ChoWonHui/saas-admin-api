@@ -59,8 +59,16 @@ public class BranchTable {
     @Column(name = "height", nullable = false)
     private int height;
 
+    /** 회전 각도(도). 캔버스에서 테이블을 돌려 배치할 때 쓴다. 기존 행 호환을 위해 nullable(=0). */
+    @Column(name = "rotation")
+    private Integer rotation;
+
+    /** 사용 가능 여부. false 면 손님 QR 주문을 받지 않는다. 기존 행 호환을 위해 nullable(=true). */
+    @Column(name = "active")
+    private Boolean active;
+
     public static BranchTable of(Long branchId, String code, int floorNo, String label, int seats, String kind,
-                                 int x, int y, int width, int height) {
+                                 int x, int y, int width, int height, int rotation, boolean active) {
         BranchTable t = new BranchTable();
         t.branchId = branchId;
         t.code = (code == null || code.isBlank()) ? java.util.UUID.randomUUID().toString() : code;
@@ -72,11 +80,13 @@ public class BranchTable {
         t.y = y;
         t.width = width;
         t.height = height;
+        t.rotation = normRotation(rotation);
+        t.active = active;
         return t;
     }
 
     /** 배치 재저장 시 위치·좌석 등만 갱신한다(code·id 는 유지). */
-    public void update(int floorNo, String label, int seats, String kind, int x, int y, int width, int height) {
+    public void update(int floorNo, String label, int seats, String kind, int x, int y, int width, int height, int rotation, boolean active) {
         this.floorNo = floorNo;
         this.label = (label == null || label.isBlank()) ? null : label;
         this.seats = seats;
@@ -85,5 +95,22 @@ public class BranchTable {
         this.y = y;
         this.width = width;
         this.height = height;
+        this.rotation = normRotation(rotation);
+        this.active = active;
+    }
+
+    /** 저장·조회 편의: null 이면 0. */
+    public int rotationOrZero() {
+        return rotation == null ? 0 : rotation;
+    }
+
+    /** 사용 가능 여부: null(기존 행)은 사용 가능으로 본다. */
+    public boolean activeOrTrue() {
+        return active == null || active;
+    }
+
+    private static int normRotation(int r) {
+        int v = r % 360;
+        return v < 0 ? v + 360 : v;
     }
 }

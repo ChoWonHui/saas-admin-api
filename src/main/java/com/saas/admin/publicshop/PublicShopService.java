@@ -47,7 +47,7 @@ public class PublicShopService {
         Tenant tenant = requireTenant(tenantCode);
         BranchTable t = requireTableOf(tenant.getId(), tableCode);
         String label = (t.getLabel() == null || t.getLabel().isBlank()) ? "테이블" : t.getLabel();
-        return new ShopTableView(tenant.getName(), tenant.getCode(), t.getId(), t.getCode(), label, t.getSeats());
+        return new ShopTableView(tenant.getName(), tenant.getCode(), t.getId(), t.getCode(), label, t.getSeats(), t.activeOrTrue());
     }
 
     /** 가게 메인 페이지 콘텐츠(손님용). 미표시면 published=false 로 가게명만 온다. */
@@ -109,6 +109,9 @@ public class PublicShopService {
     public OrderPlaced placeOrder(String tenantCode, String tableCode, PlaceOrderRequest req) {
         Tenant tenant = requireTenant(tenantCode);
         BranchTable t = requireTableOf(tenant.getId(), tableCode);
+        if (!t.activeOrTrue()) {
+            throw new ApiException(ErrorCode.TABLE_DISABLED);
+        }
         String label = (t.getLabel() == null || t.getLabel().isBlank()) ? "테이블" : t.getLabel();
 
         var lines = req.items().stream()

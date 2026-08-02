@@ -8,6 +8,7 @@ import com.saas.admin.order.domain.OrderStatus;
 import com.saas.admin.order.dto.OrderDtos.*;
 import com.saas.admin.order.repository.OrderItemRepository;
 import com.saas.admin.order.repository.OrderRepository;
+import com.saas.admin.notify.TenantNotifySocketHandler;
 import com.saas.admin.payment.PaymentGateway;
 import com.saas.admin.tenant.TenantBranchService;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -34,6 +37,7 @@ public class OrderService {
     private final OrderItemRepository itemRepository;
     private final TenantBranchService branchService;
     private final PaymentGateway paymentGateway;
+    private final TenantNotifySocketHandler tenantNotifyHandler;
 
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("yyyyMMdd");
 
@@ -149,7 +153,22 @@ public class OrderService {
                 .toList();
         items.forEach(it -> { it.assignOrderId(order.getId()); itemRepository.save(it); });
 
+        // 손님 결제 완료 → 커밋 후 사장님 주문관리 화면에 실시간 푸시(롤백 시 헛알림 방지).
+        pushNewOrderAfterCommit(tenantId, order.getId(), req.tableLabel(), total, req.orderType());
         return OrderDetail.of(order, items);
+    }
+
+    private void pushNewOrderAfterCommit(Long tenantId, Long orderId, String tableLabel, int amount, String orderType) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    tenantNotifyHandler.pushNewOrder(tenantId, orderId, tableLabel, amount, orderType);
+                }
+            });
+        } else {
+            tenantNotifyHandler.pushNewOrder(tenantId, orderId, tableLabel, amount, orderType);
+        }
     }
 
     @Transactional

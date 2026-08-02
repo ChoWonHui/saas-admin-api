@@ -77,6 +77,14 @@ public class TenantTableController {
         return ResponseEntity.ok().contentType(MediaType.IMAGE_PNG).body(QrGenerator.png(url, 360));
     }
 
+    @Operation(summary = "테이블 주문 URL (복사·공유용)", description = "QR 이 담고 있는 주문 링크 문자열을 그대로 돌려준다.")
+    @GetMapping("/{tableId}/order-url")
+    public ResponseEntity<java.util.Map<String, String>> orderUrl(@AuthenticationPrincipal AuthPrincipal principal,
+                                                                  @PathVariable Long tableId) {
+        String url = tableService.orderUrl(tenantId(principal), tableId, orderBaseUrl);
+        return ResponseEntity.ok(java.util.Map.of("url", url));
+    }
+
     @Operation(summary = "포장 주문 QR (내URL/업체코드/takeout)", description = "포장 가능일 때만 붙인다. 스캔하면 포장 주문 화면으로 이동.")
     @GetMapping(value = "/takeout-qr", produces = MediaType.IMAGE_PNG_VALUE)
     public ResponseEntity<byte[]> takeoutQr(@AuthenticationPrincipal AuthPrincipal principal) {

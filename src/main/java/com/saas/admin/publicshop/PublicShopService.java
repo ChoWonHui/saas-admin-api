@@ -11,6 +11,7 @@ import com.saas.admin.publicshop.PublicShopDtos.*;
 import com.saas.admin.tenant.TenantBranchService;
 import com.saas.admin.tenant.domain.BranchTable;
 import com.saas.admin.tenant.domain.Tenant;
+import com.saas.admin.tenant.domain.TenantStatus;
 import com.saas.admin.tenant.home.TenantHomeDtos.HomeView;
 import com.saas.admin.tenant.home.TenantHomeService;
 import com.saas.admin.tenant.menu.TenantMenuService;
@@ -57,11 +58,13 @@ public class PublicShopService {
         return homeService.publicView(tenant.getId(), tenant.getName());
     }
 
-    /** 이 가게(기본 지점)의 메뉴판. */
+    /** 이 가게(기본 지점)의 메뉴판. 아직 지점이 없는 새 가게는 빈 메뉴로 응답한다(쓰기 금지 경로). */
     @Transactional(readOnly = true)
     public MenuResponse menu(String tenantCode) {
         Tenant tenant = requireTenant(tenantCode);
-        return menuService.getMenu(tenant.getId(), branchService.defaultBranchId(tenant.getId()));
+        return branchService.findDefaultBranchId(tenant.getId())
+                .map(branchId -> menuService.getMenu(tenant.getId(), branchId))
+                .orElseGet(() -> new MenuResponse(List.of()));
     }
 
     /** 이 테이블의 진행 중 주문(종료 전) — QR 메뉴판의 '내 주문 내역'. */
@@ -127,9 +130,18 @@ public class PublicShopService {
 
     // ===== 내부 =====
 
+    /**
+     * 손님에게 공개되는 가게는 '운영중(ACTIVE)'만이다.
+     * 대기(PENDING)·중지(SUSPENDED)·폐업(CLOSED)이거나 코드가 없으면 '없는 가게'로 취급(404) →
+     * 손님 화면은 이걸 받아 EXPRISM 회사 소개 페이지(root)로 보낸다.
+     */
     private Tenant requireTenant(String tenantCode) {
-        return tenantRepository.findByCode(tenantCode)
+        Tenant tenant = tenantRepository.findByCode(tenantCode)
                 .orElseThrow(() -> new ApiException(ErrorCode.TENANT_NOT_FOUND));
+        if (tenant.getStatus() != TenantStatus.ACTIVE) {
+            throw new ApiException(ErrorCode.TENANT_NOT_FOUND);
+        }
+        return tenant;
     }
 
     /** 테이블 코드로 찾고, 정말 이 가게 소속인지 확인한다. */

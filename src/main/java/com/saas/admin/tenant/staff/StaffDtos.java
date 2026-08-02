@@ -21,17 +21,17 @@ public final class StaffDtos {
     ) {
     }
 
-    @Schema(description = "직원 계정 생성. 로그인은 '업체코드 + 아이디 + 비밀번호'. 아이디는 가게 안에서만 유일하면 된다.")
+    @Schema(description = "직원 계정 생성. 로그인은 '업체코드 + 이메일 + 비밀번호'.")
     public record StaffCreateRequest(
-            @Schema(description = "로그인 아이디(가게 안에서 유일)", example = "master")
-            @NotBlank(message = "로그인 아이디는 필수입니다.")
-            @Pattern(regexp = "^[a-zA-Z0-9._-]{3,50}$",
-                    message = "아이디는 영문/숫자/._- 조합 3~50자입니다.")
-            String loginId,
-
-            @Schema(description = "이메일(선택). 비밀번호 재설정 등에 쓰인다.")
+            @Schema(description = "로그인 이메일(가게 안에서 유일)", example = "staff@shop.com")
+            @NotBlank(message = "이메일은 필수입니다.")
             @Email(message = "이메일 형식이 올바르지 않습니다.")
             @Size(max = 150) String email,
+
+            @Schema(description = "로그인 아이디(선택). 미지정 시 이메일에서 자동 생성한다.")
+            @Pattern(regexp = "^$|^[a-zA-Z0-9._-]{3,50}$",
+                    message = "아이디는 영문/숫자/._- 조합 3~50자입니다.")
+            String loginId,
 
             @NotBlank(message = "초기 비밀번호는 필수입니다.")
             @Size(min = 8, max = 64, message = "비밀번호는 8자 이상이어야 합니다.")
@@ -57,5 +57,9 @@ public final class StaffDtos {
     @Schema(description = "비밀번호 재설정.")
     public record ResetPasswordRequest(
             @NotBlank @Size(min = 8, max = 64, message = "비밀번호는 8자 이상이어야 합니다.") String newPassword) {
+    }
+
+    @Schema(description = "이메일 사용 가능 여부.")
+    public record EmailAvailability(boolean available) {
     }
 }

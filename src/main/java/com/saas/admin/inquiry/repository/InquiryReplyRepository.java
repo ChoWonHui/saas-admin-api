@@ -9,6 +9,8 @@ public interface InquiryReplyRepository extends JpaRepository<InquiryReply, Long
 
     List<InquiryReply> findByInquiryIdOrderByCreatedAtAsc(Long inquiryId);
 
+    List<InquiryReply> findByInquiryIdInOrderByCreatedAtAsc(List<Long> inquiryIds);
+
     void deleteByInquiryId(Long inquiryId);
 
     long countByInquiryId(Long inquiryId);

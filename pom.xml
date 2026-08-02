@@ -27,6 +27,10 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
         <!--
           스키마의 진실 공급원은 JPA 엔티티다. (마이그레이션 도구를 쓰지 않는다)
           Hibernate 의 ddl-auto=update 가 테이블을 만들고 컬럼을 추가한다.

@@ -50,23 +50,30 @@ public class TenantStaffService {
                 .toList();
     }
 
+    /** 이메일 사용 가능 여부. 이메일은 전역 유일이라 저장 전에 미리 확인해 준다. */
+    @Transactional(readOnly = true)
+    public boolean isEmailAvailable(String email) {
+        if (email == null || email.isBlank()) return false;
+        return !userAccountRepository.existsByEmail(email.trim());
+    }
+
     @Transactional
     public StaffResponse create(Long tenantId, StaffCreateRequest req) {
         Tenant tenant = requireTenant(tenantId);
         if (!STAFF_ROLES.contains(req.roleId())) {
             throw new ApiException(ErrorCode.STAFF_ROLE_INVALID);
         }
-        String loginId = req.loginId().trim();
-        // 아이디는 '가게 안에서만' 유일하면 된다.
-        if (userAccountRepository.findByTenantIdAndLoginId(tenantId, loginId).isPresent()) {
-            throw new ApiException(ErrorCode.LOGIN_ID_DUPLICATED);
-        }
-        // 이메일은 선택. 안 넣으면 로그인엔 안 쓰이는 내부용 합성 이메일을 만든다(컬럼이 NOT NULL·유니크라서).
-        String email = (req.email() == null || req.email().isBlank())
-                ? loginId + "@" + tenant.getCode().toLowerCase() + ".tenant.local"
-                : req.email().trim();
+        // 로그인은 이메일로 한다. 이메일은 전역 유일해야 한다.
+        String email = req.email().trim();
         if (userAccountRepository.existsByEmail(email)) {
             throw new ApiException(ErrorCode.EMAIL_DUPLICATED);
+        }
+        // 아이디는 가게 안에서만 유일. 지정하지 않으면 이메일에서 자동 생성한다.
+        String loginId = (req.loginId() == null || req.loginId().isBlank())
+                ? uniqueLoginId(tenantId, email)
+                : req.loginId().trim();
+        if (userAccountRepository.findByTenantIdAndLoginId(tenantId, loginId).isPresent()) {
+            throw new ApiException(ErrorCode.LOGIN_ID_DUPLICATED);
         }
         if (Role.TENANT_OWNER_ID.equals(req.roleId())
                 && tenantUserRepository.existsByTenantIdAndRoleId(tenantId, Role.TENANT_OWNER_ID)) {
@@ -136,6 +143,19 @@ public class TenantStaffService {
     private Tenant requireTenant(Long tenantId) {
         return tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new ApiException(ErrorCode.TENANT_NOT_FOUND));
+    }
+
+    /** 이메일 앞부분으로 가게 안에서 유일한 로그인 아이디를 만든다(충돌 시 -2, -3 …). */
+    private String uniqueLoginId(Long tenantId, String email) {
+        String base = email.split("@")[0].replaceAll("[^a-zA-Z0-9._-]", "");
+        if (base.length() < 3) base = "staff" + base;
+        if (base.length() > 46) base = base.substring(0, 46);
+        String candidate = base;
+        int n = 2;
+        while (userAccountRepository.findByTenantIdAndLoginId(tenantId, candidate).isPresent()) {
+            candidate = base + "-" + n++;
+        }
+        return candidate;
     }
 
     private TenantUser member(Long tenantId, Long tenantUserId) {

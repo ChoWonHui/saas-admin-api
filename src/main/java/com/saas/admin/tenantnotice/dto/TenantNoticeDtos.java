@@ -36,15 +36,25 @@ public final class TenantNoticeDtos {
     }
 
     public record TenantNoticeSummary(
-            Long id, String title, String authorName,
+            Long id, String title, String summary, String authorName,
             boolean pinned, boolean popupEnabled, LocalDateTime popupStartAt, LocalDateTime popupEndAt,
             int viewCount, LocalDateTime createdAt
     ) {
         public static TenantNoticeSummary of(TenantNotice n, String authorName) {
-            return new TenantNoticeSummary(n.getId(), n.getTitle(), authorName,
+            return new TenantNoticeSummary(n.getId(), n.getTitle(), plainSummary(n.getContent()), authorName,
                     n.isPinned(), n.isPopupEnabled(), n.getPopupStartAt(), n.getPopupEndAt(),
                     n.getViewCount(), n.getCreatedAt());
         }
+    }
+
+    /** 리치에디터 HTML 에서 태그를 걷어낸 짧은 미리보기(카드 2줄용). */
+    static String plainSummary(String html) {
+        if (html == null) return "";
+        String text = html.replaceAll("<[^>]+>", " ")
+                .replace("&nbsp;", " ").replace("&amp;", "&")
+                .replace("&lt;", "<").replace("&gt;", ">")
+                .replaceAll("\\s+", " ").trim();
+        return text.length() > 140 ? text.substring(0, 140) + "…" : text;
     }
 
     public record TenantNoticeDetail(

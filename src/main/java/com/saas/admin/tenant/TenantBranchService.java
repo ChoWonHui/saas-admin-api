@@ -43,6 +43,20 @@ public class TenantBranchService {
                 });
     }
 
+    /**
+     * 기본 지점 id — 있으면 반환, 없으면 비어 있음(생성하지 않는다).
+     * 손님 메뉴판처럼 읽기 전용(쓰기 금지) 경로에서 쓴다.
+     * (읽기 트랜잭션 안에서 {@link #defaultBranchId}를 부르면 지점 자동 생성 INSERT 가
+     *  read-only 커넥션에 막혀 500 이 난다.)
+     */
+    @Transactional(readOnly = true)
+    public java.util.Optional<Long> findDefaultBranchId(Long tenantId) {
+        requireTenant(tenantId);
+        return branchRepository.findByTenantIdAndDeletedOrderByBranchNoAsc(tenantId, NOT_DELETED).stream()
+                .findFirst()
+                .map(TenantBranch::getId);
+    }
+
     /** 한 업체의 지점 목록(호점 순). */
     @Transactional(readOnly = true)
     public List<BranchResponse> list(Long tenantId) {

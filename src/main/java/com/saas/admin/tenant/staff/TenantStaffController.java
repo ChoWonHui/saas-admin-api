@@ -28,6 +28,13 @@ public class TenantStaffController {
         return ResponseEntity.ok(staffService.list(tenantId));
     }
 
+    @Operation(summary = "이메일 사용 가능 여부", description = "이메일은 전역 유일이라, 저장 전에 중복 여부를 미리 확인한다.")
+    @GetMapping("/email-available")
+    public ResponseEntity<EmailAvailability> emailAvailable(@PathVariable Long tenantId,
+                                                            @RequestParam String email) {
+        return ResponseEntity.ok(new EmailAvailability(staffService.isEmailAvailable(email)));
+    }
+
     @Operation(summary = "직원 계정 생성", description = "로그인 계정(이메일/비번) + 소속·역할을 만든다.")
     @PostMapping
     public ResponseEntity<StaffResponse> create(@PathVariable Long tenantId,

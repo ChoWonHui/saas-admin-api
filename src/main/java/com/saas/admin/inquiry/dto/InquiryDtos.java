@@ -38,6 +38,28 @@ public final class InquiryDtos {
     ) {
     }
 
+    // ---- 업체별 대화(채팅) ----
+
+    /** 관리자 문의 목록 — 업체별로 하나의 대화방으로 묶는다. */
+    public record TenantConvSummary(
+            Long tenantId, String tenantName,
+            String lastMessage, String lastFrom, LocalDateTime lastAt,
+            boolean needsReply, long messageCount
+    ) {
+    }
+
+    /** 대화 속 한 메시지. from = TENANT / ADMIN. */
+    public record ConvMessage(
+            String from, String name, String content, List<String> imageUrls, LocalDateTime at
+    ) {
+    }
+
+    /** 한 업체와의 전체 대화(시간순). */
+    public record ConvView(
+            Long tenantId, String tenantName, List<ConvMessage> messages
+    ) {
+    }
+
     // ---- 요청 ----
 
     @Schema(description = "문의 등록 (제목 + 일반 텍스트 본문 + 이미지 URL 목록)")

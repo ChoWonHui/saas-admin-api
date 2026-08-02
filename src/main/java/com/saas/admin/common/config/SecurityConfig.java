@@ -47,6 +47,8 @@ public class SecurityConfig {
                         // 관리자(내부 직원)는 사번으로 여기서 로그인한다. 업체 사용자와 경로가 다르다.
                         .requestMatchers("/api/auth/admin/login", "/api/auth/admin/refresh").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
+                        // 웹소켓 핸드셰이크 — 토큰 인증은 핸들러(afterConnectionEstablished)에서 직접 한다.
+                        .requestMatchers("/ws/**").permitAll()
                         // 손님(무인증) 테이블 주문 — QR 로 들어온 손님이 메뉴판을 보고 주문을 넣는다.
                         .requestMatchers("/api/public/**").permitAll()
                         // Swagger UI / OpenAPI 문서.

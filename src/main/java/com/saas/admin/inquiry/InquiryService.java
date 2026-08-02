@@ -12,12 +12,18 @@ import com.saas.admin.inquiry.domain.InquiryStatus;
 import com.saas.admin.inquiry.dto.InquiryDtos.*;
 import com.saas.admin.inquiry.repository.InquiryReplyRepository;
 import com.saas.admin.inquiry.repository.InquiryRepository;
+import com.saas.admin.notify.AdminNotifySocketHandler;
 import com.saas.admin.tenant.domain.Tenant;
 import com.saas.admin.tenant.repository.TenantRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -33,6 +39,8 @@ public class InquiryService {
     private final TenantRepository tenantRepository;
     private final UserAccountRepository userAccountRepository;
     private final AdminAccountRepository adminAccountRepository;
+    private final AdminNotifySocketHandler notifyHandler;
+    private final com.saas.admin.notify.TenantNotifySocketHandler tenantNotifyHandler;
 
     // ===== 업체(사장님) 쪽 =====
 
@@ -41,6 +49,7 @@ public class InquiryService {
         String name = tenantUserName(userId);
         Inquiry q = inquiryRepository.save(Inquiry.create(
                 tenantId, userId, name, req.title().trim(), req.content(), safeImages(req.imageUrls())));
+        pushAfterCommit(tenantId, q.getId(), q.getTitle(), tenantDisplayName(tenantId));
         return detail(q, List.of());
     }
 
@@ -69,7 +78,41 @@ public class InquiryService {
         replyRepository.save(InquiryReply.create(
                 inquiryId, InquiryAuthorType.TENANT, tenantUserName(userId), req.content(), safeImages(req.imageUrls())));
         q.reopen();
+        pushAfterCommit(tenantId, q.getId(), q.getTitle(), tenantDisplayName(tenantId));
         return detail(q, replyRepository.findByInquiryIdOrderByCreatedAtAsc(inquiryId));
+    }
+
+    private String tenantDisplayName(Long tenantId) {
+        return tenantRepository.findById(tenantId).map(Tenant::getName).orElse("");
+    }
+
+    /** DB 커밋이 끝난 뒤에만 실시간 알림을 밀어준다(롤백 시 헛알림 방지). */
+    private void pushAfterCommit(Long tenantId, Long inquiryId, String title, String tenantName) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    notifyHandler.pushNewInquiry(tenantId, inquiryId, title, tenantName);
+                }
+            });
+        } else {
+            notifyHandler.pushNewInquiry(tenantId, inquiryId, title, tenantName);
+        }
+    }
+
+    /** 관리자 답변 → 커밋 후 그 업체에 실시간 푸시. */
+    private void pushTenantAfterCommit(Long tenantId, Long inquiryId, String content) {
+        String preview = preview(content);
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    tenantNotifyHandler.pushAdminReply(tenantId, inquiryId, preview);
+                }
+            });
+        } else {
+            tenantNotifyHandler.pushAdminReply(tenantId, inquiryId, preview);
+        }
     }
 
     // ===== 관리자 쪽 =====
@@ -99,6 +142,7 @@ public class InquiryService {
         replyRepository.save(InquiryReply.create(
                 inquiryId, InquiryAuthorType.ADMIN, adminName(empNo), req.content(), safeImages(req.imageUrls())));
         q.markAnswered();
+        pushTenantAfterCommit(q.getTenantId(), q.getId(), req.content());
         return detail(q, replyRepository.findByInquiryIdOrderByCreatedAtAsc(inquiryId));
     }
 
@@ -115,6 +159,80 @@ public class InquiryService {
         Inquiry q = requireInquiry(inquiryId);
         replyRepository.deleteByInquiryId(inquiryId);
         inquiryRepository.delete(q);
+    }
+
+    // ===== 업체별 대화(채팅) — 문의별이 아니라 업체 하나로 묶어 본다 =====
+
+    /** 관리자 문의 목록: 업체별로 하나의 대화방으로 묶어 마지막 메시지·미답변 여부를 준다. */
+    @Transactional(readOnly = true)
+    public List<TenantConvSummary> listTenantConversations() {
+        List<Inquiry> all = inquiryRepository.findByOrderByCreatedAtDesc();
+        if (all.isEmpty()) return List.of();
+        Map<Long, List<Inquiry>> byTenant = all.stream().collect(Collectors.groupingBy(Inquiry::getTenantId));
+        Map<Long, List<InquiryReply>> repliesByInquiry = replyRepository
+                .findByInquiryIdInOrderByCreatedAtAsc(all.stream().map(Inquiry::getId).toList())
+                .stream().collect(Collectors.groupingBy(InquiryReply::getInquiryId));
+        Map<Long, String> names = tenantNames(all);
+
+        List<TenantConvSummary> result = new ArrayList<>();
+        for (var e : byTenant.entrySet()) {
+            Long tid = e.getKey();
+            LocalDateTime lastAt = null;
+            String lastMsg = "", lastFrom = "TENANT";
+            long count = 0;
+            boolean needsReply = e.getValue().stream().anyMatch(q -> q.getStatus() == InquiryStatus.OPEN);
+            for (Inquiry q : e.getValue()) {
+                count++;
+                if (lastAt == null || q.getCreatedAt().isAfter(lastAt)) { lastAt = q.getCreatedAt(); lastMsg = q.getContent(); lastFrom = "TENANT"; }
+                for (InquiryReply r : repliesByInquiry.getOrDefault(q.getId(), List.of())) {
+                    count++;
+                    if (lastAt == null || r.getCreatedAt().isAfter(lastAt)) { lastAt = r.getCreatedAt(); lastMsg = r.getContent(); lastFrom = r.getAuthorType().name(); }
+                }
+            }
+            result.add(new TenantConvSummary(tid, names.getOrDefault(tid, "(삭제된 가게)"),
+                    preview(lastMsg), lastFrom, lastAt, needsReply, count));
+        }
+        result.sort((a, b) -> b.lastAt().compareTo(a.lastAt()));
+        return result;
+    }
+
+    /** 한 업체와의 전체 대화(모든 문의·답글을 시간순으로 병합). */
+    @Transactional(readOnly = true)
+    public ConvView getTenantConversation(Long tenantId) {
+        String tenantName = tenantRepository.findById(tenantId).map(Tenant::getName).orElse("(삭제된 가게)");
+        List<Inquiry> asc = new ArrayList<>(inquiryRepository.findByTenantIdOrderByCreatedAtDesc(tenantId));
+        asc.sort(Comparator.comparing(Inquiry::getCreatedAt));
+        List<Long> ids = asc.stream().map(Inquiry::getId).toList();
+        Map<Long, List<InquiryReply>> repliesByInquiry = ids.isEmpty() ? Map.of()
+                : replyRepository.findByInquiryIdInOrderByCreatedAtAsc(ids).stream().collect(Collectors.groupingBy(InquiryReply::getInquiryId));
+        List<ConvMessage> msgs = new ArrayList<>();
+        for (Inquiry q : asc) {
+            msgs.add(new ConvMessage("TENANT", q.getAuthorName(), q.getContent(), List.copyOf(q.getImageUrls()), q.getCreatedAt()));
+            for (InquiryReply r : repliesByInquiry.getOrDefault(q.getId(), List.of())) {
+                msgs.add(new ConvMessage(r.getAuthorType().name(), r.getAuthorName(), r.getContent(), List.copyOf(r.getImageUrls()), r.getCreatedAt()));
+            }
+        }
+        msgs.sort(Comparator.comparing(ConvMessage::at));
+        return new ConvView(tenantId, tenantName, msgs);
+    }
+
+    /** 관리자가 그 업체 대화에 메시지를 보낸다 → 가장 최근 문의에 답글로 달고 답변완료. */
+    @Transactional
+    public ConvView sendAdminMessage(Long tenantId, String empNo, ReplyCreateRequest req) {
+        List<Inquiry> qs = inquiryRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
+        if (qs.isEmpty()) throw new ApiException(ErrorCode.INQUIRY_NOT_FOUND);
+        Inquiry latest = qs.get(0);
+        replyRepository.save(InquiryReply.create(
+                latest.getId(), InquiryAuthorType.ADMIN, adminName(empNo), req.content(), safeImages(req.imageUrls())));
+        latest.markAnswered();
+        pushTenantAfterCommit(tenantId, latest.getId(), req.content());
+        return getTenantConversation(tenantId);
+    }
+
+    private String preview(String s) {
+        if (s == null) return "";
+        String t = s.replaceAll("\\s+", " ").trim();
+        return t.length() > 50 ? t.substring(0, 50) + "…" : t;
     }
 
     // ===== 내부 =====

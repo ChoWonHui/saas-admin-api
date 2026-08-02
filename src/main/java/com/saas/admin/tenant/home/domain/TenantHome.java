@@ -64,10 +64,26 @@ public class TenantHome {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    /**
+     * 업체 생성 시 기본으로 넣는 미니룸(가게 정체성) — 프론트 iso.js 의 DEFAULT_ROOM() 과 동일.
+     * v2 방 1개(크림 벽/우드 바닥) + 요리사 캐릭터. 저장을 누르지 않아도 손님 화면에 기본 미니룸이 보이게 한다.
+     */
+    public static final String DEFAULT_MINIROOM =
+            "{\"v\":2,\"floors\":[{\"wall\":\"cream\",\"floor\":\"wood\",\"items\":[],\"banners\":[]}],"
+            + "\"character\":{\"skin\":\"#f0c49b\",\"hairStyle\":\"short\",\"hairColor\":\"#2b2018\","
+            + "\"outfit\":\"#e05a5a\",\"apron\":true,\"hat\":\"chef\",\"x\":3,\"y\":5}}";
+
     public static TenantHome create(Long tenantId) {
         TenantHome h = new TenantHome();
         h.tenantId = tenantId;
         h.published = "Y";
+        return h;
+    }
+
+    /** 업체 생성 시 기본 미니룸을 채운 홈(공개 상태). */
+    public static TenantHome createDefault(Long tenantId) {
+        TenantHome h = create(tenantId);
+        h.miniroom = DEFAULT_MINIROOM;
         return h;
     }
 

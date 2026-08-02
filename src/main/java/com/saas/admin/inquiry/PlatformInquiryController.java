@@ -61,6 +61,28 @@ public class PlatformInquiryController {
         return ResponseEntity.noContent().build();
     }
 
+    // ===== 업체별 대화(채팅) =====
+
+    @Operation(summary = "업체별 대화 목록", description = "문의별이 아니라 업체별로 하나의 대화방으로 묶는다. 미답변 업체 우선 표시용 needsReply 포함.")
+    @GetMapping("/tenants")
+    public ResponseEntity<List<TenantConvSummary>> tenantConversations() {
+        return ResponseEntity.ok(inquiryService.listTenantConversations());
+    }
+
+    @Operation(summary = "업체 대화 전체(시간순)")
+    @GetMapping("/tenants/{tenantId}")
+    public ResponseEntity<ConvView> tenantConversation(@PathVariable Long tenantId) {
+        return ResponseEntity.ok(inquiryService.getTenantConversation(tenantId));
+    }
+
+    @Operation(summary = "업체 대화에 메시지 보내기(관리자 답변)")
+    @PostMapping("/tenants/{tenantId}/messages")
+    public ResponseEntity<ConvView> sendToTenant(@AuthenticationPrincipal AuthPrincipal principal,
+                                                 @PathVariable Long tenantId,
+                                                 @Valid @RequestBody ReplyCreateRequest req) {
+        return ResponseEntity.ok(inquiryService.sendAdminMessage(tenantId, empNo(principal), req));
+    }
+
     private String empNo(AuthPrincipal principal) {
         if (principal == null || !principal.isAdmin()) {
             throw new ApiException(ErrorCode.ACCESS_DENIED);

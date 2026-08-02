@@ -16,6 +16,8 @@ import com.saas.admin.tenant.dto.TenantCreateRequest;
 import com.saas.admin.tenant.dto.TenantPlanResponse;
 import com.saas.admin.tenant.dto.TenantResponse;
 import com.saas.admin.tenant.dto.TenantUpdateRequest;
+import com.saas.admin.tenant.home.domain.TenantHome;
+import com.saas.admin.tenant.home.repository.TenantHomeRepository;
 import com.saas.admin.tenant.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +41,7 @@ public class TenantService {
     private final TenantSubscriptionRepository subscriptionRepository;
     private final UserAccountRepository userAccountRepository;
     private final TenantUserRepository tenantUserRepository;
+    private final TenantHomeRepository tenantHomeRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
 
@@ -81,6 +84,9 @@ public class TenantService {
         tenantUserRepository.save(TenantUser.createOwner(tenant.getId(), owner.getId()));
 
         subscriptionRepository.save(TenantSubscription.start(tenant.getId(), plan.getId()));
+
+        // 기본 미니룸을 미리 넣어, 사장님이 저장을 누르지 않아도 손님 화면에 가게 미니룸이 보이게 한다.
+        tenantHomeRepository.save(TenantHome.createDefault(tenant.getId()));
 
         auditService.record(AuditLog.builder()
                 .tenantId(tenant.getId())
@@ -129,6 +135,9 @@ public class TenantService {
                 request.address(),
                 request.addressDetail(),
                 actorId));
+
+        // 기본 미니룸을 미리 넣어, 저장 전에도 손님 화면에 가게 미니룸이 보이게 한다.
+        tenantHomeRepository.save(TenantHome.createDefault(tenant.getId()));
 
         audit(tenant, actorId, "TENANT_CREATE", "code=" + tenant.getCode(), ip, userAgent);
         return TenantResponse.from(tenant);

@@ -36,6 +36,14 @@ public class TenantWaitlistController {
         return ResponseEntity.ok(waitlistService.add(tenantId(p), req));
     }
 
+    @Operation(summary = "예약 수정", description = "저장된 예약의 테이블·일시·이름·인원·연락처를 바꾼다.")
+    @PutMapping("/{id}")
+    public ResponseEntity<WaitlistEntryView> update(@AuthenticationPrincipal AuthPrincipal p,
+                                                    @PathVariable Long id,
+                                                    @Valid @RequestBody WaitlistUpdateRequest req) {
+        return ResponseEntity.ok(waitlistService.update(tenantId(p), id, req));
+    }
+
     @Operation(summary = "대기 상태 변경", description = "CALLED(호출) / SEATED(착석).")
     @PatchMapping("/{id}/status")
     public ResponseEntity<WaitlistEntryView> changeStatus(@AuthenticationPrincipal AuthPrincipal p,

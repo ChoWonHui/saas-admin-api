@@ -105,8 +105,8 @@ public class TenantWaitlistService {
         Long branchId = branchService.defaultBranchId(tenantId);
         WaitlistType type = req.type();
 
-        // 대기표(WAITING)는 손님에게 연락해야 하므로 연락처 필수. 예약은 테이블·시간으로 관리하므로 연락처는 선택.
-        if (type == WaitlistType.WAITING && (req.phone() == null || req.phone().isBlank())) {
+        // 예약·대기 모두 손님에게 연락해야 하므로 연락처 필수.
+        if (req.phone() == null || req.phone().isBlank()) {
             throw new ApiException(ErrorCode.WAITLIST_PHONE_REQUIRED);
         }
         LocalDateTime reservedAt = null;
@@ -118,6 +118,10 @@ public class TenantWaitlistService {
             }
             if (req.reservedAt() == null) {
                 throw new ApiException(ErrorCode.WAITLIST_RESERVED_AT_REQUIRED);
+            }
+            // 날짜+시간을 합쳐 현재 시각보다 이전이면 예약을 받지 않는다(오늘이라도 지난 시간은 거부).
+            if (req.reservedAt().isBefore(java.time.LocalDateTime.now())) {
+                throw new ApiException(ErrorCode.WAITLIST_RESERVED_AT_PAST);
             }
             // 선택한 테이블이 이 업체(지점) 것인지 확인.
             boolean owns = branchService.layout(tenantId, branchId).tables().stream()
@@ -149,6 +153,35 @@ public class TenantWaitlistService {
         return waitlistRepository.findByTenantIdAndStatusInOrderByQueueNoAscIdAsc(tenantId, ACTIVE).stream()
                 .filter(e -> e.getType() == WaitlistType.WAITING)
                 .mapToInt(WaitlistEntry::getQueueNo).max().orElse(0) + 1;
+    }
+
+    /** 예약 수정 — 저장된 예약의 테이블·일시·이름·인원·연락처를 바꾼다(예약만). */
+    @Transactional
+    public WaitlistEntryView update(Long tenantId, Long id, WaitlistUpdateRequest req) {
+        WaitlistEntry entry = require(tenantId, id);
+        if (entry.getType() != WaitlistType.RESERVATION) {
+            throw new ApiException(ErrorCode.WAITLIST_INVALID_STATUS, "예약만 수정할 수 있습니다.");
+        }
+        if (req.tableId() == null) {
+            throw new ApiException(ErrorCode.WAITLIST_TABLE_REQUIRED);
+        }
+        if (req.reservedAt() == null) {
+            throw new ApiException(ErrorCode.WAITLIST_RESERVED_AT_REQUIRED);
+        }
+        if (req.reservedAt().isBefore(LocalDateTime.now())) {
+            throw new ApiException(ErrorCode.WAITLIST_RESERVED_AT_PAST);
+        }
+        if (req.phone() == null || req.phone().isBlank()) {
+            throw new ApiException(ErrorCode.WAITLIST_PHONE_REQUIRED);
+        }
+        Long branchId = branchService.defaultBranchId(tenantId);
+        boolean owns = branchService.layout(tenantId, branchId).tables().stream()
+                .anyMatch(t -> t.tableId().equals(req.tableId()));
+        if (!owns) {
+            throw new ApiException(ErrorCode.WAITLIST_TABLE_NOT_FOUND);
+        }
+        entry.updateReservation(req.reservedAt(), req.tableId(), req.partyName(), req.partySize(), req.phone());
+        return viewOf(tenantId, entry);
     }
 
     /** 상태 변경 — 호출(CALLED) / 착석(SEATED) 만. */

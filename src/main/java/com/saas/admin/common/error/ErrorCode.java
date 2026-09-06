@@ -50,6 +50,7 @@ public enum ErrorCode {
     WAITLIST_INVALID_STATUS(HttpStatus.BAD_REQUEST, "상태는 호출·착석·취소 중에서 선택하세요."),
     WAITLIST_PHONE_REQUIRED(HttpStatus.BAD_REQUEST, "연락처를 입력하세요."),
     WAITLIST_RESERVED_AT_REQUIRED(HttpStatus.BAD_REQUEST, "예약 일시를 입력하세요."),
+    WAITLIST_RESERVED_AT_PAST(HttpStatus.BAD_REQUEST, "현재 시간보다 이전으로는 예약할 수 없습니다."),
     WAITLIST_TABLE_REQUIRED(HttpStatus.BAD_REQUEST, "예약할 테이블을 선택하세요."),
     WAITLIST_TABLE_NOT_FOUND(HttpStatus.BAD_REQUEST, "선택한 테이블을 찾을 수 없습니다."),
     TENANT_MENU_NOT_FOUND(HttpStatus.NOT_FOUND, "메뉴를 찾을 수 없습니다."),

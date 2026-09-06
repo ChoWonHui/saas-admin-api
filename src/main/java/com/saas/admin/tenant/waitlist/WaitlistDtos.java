@@ -45,6 +45,26 @@ public final class WaitlistDtos {
     ) {
     }
 
+    @Schema(description = "예약 수정. 예약 테이블·일시·연락처 필수. (대기표는 수정 대상 아님)")
+    public record WaitlistUpdateRequest(
+            @Schema(description = "예약 대상 테이블 id.")
+            Long tableId,
+
+            @Schema(description = "예약 일시.")
+            LocalDateTime reservedAt,
+
+            @Size(max = 40, message = "이름은 40자를 넘을 수 없습니다.")
+            String partyName,
+
+            @Min(value = 1, message = "인원은 1명 이상이어야 합니다.")
+            @Max(value = 99, message = "인원이 너무 많습니다.")
+            int partySize,
+
+            @Size(max = 30, message = "연락처가 너무 깁니다.")
+            String phone
+    ) {
+    }
+
     @Schema(description = "상태 변경. CALLED(호출) / SEATED(착석) 만 허용. 취소는 DELETE.")
     public record WaitlistStatusRequest(
             @NotNull(message = "상태는 필수입니다.")

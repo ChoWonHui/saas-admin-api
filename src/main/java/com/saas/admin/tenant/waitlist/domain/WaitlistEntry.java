@@ -98,6 +98,16 @@ public class WaitlistEntry {
         this.status = next;
     }
 
+    /** 예약 내용 수정(예약 대상 테이블·일시·이름·인원·연락처). */
+    public void updateReservation(LocalDateTime reservedAt, Long tableId,
+                                  String partyName, int partySize, String phone) {
+        this.reservedAt = reservedAt;
+        this.tableId = tableId;
+        this.partyName = blankToNull(partyName);
+        this.partySize = partySize;
+        this.phone = blankToNull(phone);
+    }
+
     public boolean belongsTo(Long tenantId) {
         return this.tenantId != null && this.tenantId.equals(tenantId);
     }

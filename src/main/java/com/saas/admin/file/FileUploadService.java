@@ -11,7 +11,11 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
+import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
@@ -103,12 +107,21 @@ public class FileUploadService {
         // 최대 가로·세로를 넘으면 비율을 유지하며 줄인다.
         bytes = resizeIfNeeded(bytes, contentType);
 
+        // 그래도 무거우면 화질을 낮춰 목표 용량 안으로 압축한다.
+        // 픽셀 수가 작아도 파일이 큰 사진(사진기 원본 JPEG, 무손실 PNG)이 여기서 걸린다.
+        Compressed c = compressToLimit(bytes, contentType, file.getOriginalFilename());
+        bytes = c.data;
+        contentType = c.contentType;
+
         // S3 가 꺼져 있으면 DB 이미지 저장소로 폴백한다(가게꾸미기 이미지와 동일하게 /api/public/decorate/images 로 서빙).
         if (!isEnabled()) {
             return storeToDb(bytes, contentType, file.getOriginalFilename());
         }
 
-        String key = buildKey(file.getOriginalFilename(), contentType);
+        // 압축으로 형식이 바뀌었으면 원본 파일명의 확장자를 쓰지 않는다.
+        // 그대로 두면 키는 .png 인데 내용은 JPEG 인 파일이 만들어진다.
+        boolean typeChanged = !contentType.equals(file.getContentType());
+        String key = buildKey(typeChanged ? null : file.getOriginalFilename(), contentType);
         try {
             PutObjectRequest request = PutObjectRequest.builder()
                     .bucket(bucket)
@@ -166,6 +179,130 @@ public class FileUploadService {
         } catch (Exception e) {
             log.warn("이미지 축소 실패(원본 유지): {}", e.getMessage());
             return data;
+        }
+    }
+
+    /** 압축 결과. 형식이 바뀔 수 있어(PNG → JPEG) content-type 을 함께 돌려준다. */
+    private record Compressed(byte[] data, String contentType) {}
+
+    /** 압축 목표 용량. 이 아래로 들어오면 더 손대지 않는다. */
+    private static final long TARGET_SIZE = 1024L * 1024;
+
+    /** 화질을 낮춰가며 시도할 단계. 아래로 갈수록 파일이 작아진다. */
+    private static final float[] JPEG_QUALITIES = {0.85f, 0.7f, 0.55f, 0.45f, 0.35f};
+
+    /** 화질만으로 목표에 못 닿으면 가로·세로를 이 비율로 줄여 다시 시도한다. */
+    private static final double DOWNSCALE_STEP = 0.75;
+    private static final int MAX_DOWNSCALE_ROUNDS = 4;
+
+    /**
+     * 이미지를 {@link #TARGET_SIZE} 아래로 압축한다.
+     *
+     * <p>{@link #resizeIfNeeded} 는 가로·세로가 클 때만 줄인다. 그래서 1600px 안에 들어오지만
+     * 파일은 무거운 사진(사진기 원본 JPEG, 무손실 PNG)이 그대로 통과했고, S3 가 꺼진 환경에서는
+     * MySQL 의 max_allowed_packet(4MB)을 넘겨 업로드가 500 으로 실패했다.
+     *
+     * <p>투명한 이미지는 JPEG 로 바꾸면 배경이 검게 되므로 PNG 를 유지한 채 크기만 줄인다.
+     * 그 외에는 JPEG 로 다시 인코딩하면서 화질을 단계적으로 낮추고, 그래도 모자라면 크기를 줄인다.
+     * GIF 는 움직임이 깨지므로 손대지 않는다.
+     *
+     * <p>어떤 이유로든 실패하면 원본을 그대로 돌려준다. 압축은 거들 뿐, 업로드를 막지 않는다.
+     */
+    private Compressed compressToLimit(byte[] data, String contentType, String name) {
+        if (data.length <= TARGET_SIZE) {
+            return new Compressed(data, contentType);
+        }
+        if ("image/gif".equals(contentType)) {
+            return new Compressed(data, contentType); // 애니메이션 보존
+        }
+        try {
+            BufferedImage src = ImageIO.read(new ByteArrayInputStream(data));
+            if (src == null) {
+                return new Compressed(data, contentType); // ImageIO 가 못 읽는 형식(webp 등)
+            }
+            boolean hasAlpha = src.getColorModel().hasAlpha();
+            BufferedImage current = src;
+
+            for (int round = 0; round <= MAX_DOWNSCALE_ROUNDS; round++) {
+                if (hasAlpha) {
+                    // 투명도 유지: PNG 는 화질 손잡이가 없어 크기를 줄이는 것으로만 대응한다.
+                    byte[] out = encodePng(current);
+                    if (out.length > 0 && out.length <= TARGET_SIZE) {
+                        log.info("이미지 압축(PNG, 투명): {} {} -> {} bytes", name, data.length, out.length);
+                        return new Compressed(out, "image/png");
+                    }
+                } else {
+                    for (float q : JPEG_QUALITIES) {
+                        byte[] out = encodeJpeg(current, q);
+                        if (out.length > 0 && out.length <= TARGET_SIZE) {
+                            log.info("이미지 압축(JPEG q={}): {} {} -> {} bytes", q, name, data.length, out.length);
+                            return new Compressed(out, "image/jpeg");
+                        }
+                    }
+                }
+                int nw = Math.max(1, (int) Math.round(current.getWidth() * DOWNSCALE_STEP));
+                int nh = Math.max(1, (int) Math.round(current.getHeight() * DOWNSCALE_STEP));
+                if (nw < 200 || nh < 200) {
+                    break; // 더 줄이면 알아볼 수 없다
+                }
+                current = scale(current, nw, nh, hasAlpha);
+            }
+
+            // 목표에 못 닿았어도 가능한 만큼 줄인 결과를 쓴다. 원본보다는 작다.
+            byte[] best = hasAlpha ? encodePng(current) : encodeJpeg(current, JPEG_QUALITIES[JPEG_QUALITIES.length - 1]);
+            if (best.length > 0 && best.length < data.length) {
+                log.info("이미지 압축(목표 미달, 최선): {} {} -> {} bytes", name, data.length, best.length);
+                return new Compressed(best, hasAlpha ? "image/png" : "image/jpeg");
+            }
+            return new Compressed(data, contentType);
+        } catch (Exception e) {
+            log.warn("이미지 압축 실패(원본 유지): {}", e.getMessage());
+            return new Compressed(data, contentType);
+        }
+    }
+
+    private BufferedImage scale(BufferedImage src, int w, int h, boolean alpha) {
+        BufferedImage dst = new BufferedImage(w, h, alpha ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = dst.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.drawImage(src, 0, 0, w, h, null);
+        g.dispose();
+        return dst;
+    }
+
+    private byte[] encodePng(BufferedImage img) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ImageIO.write(img, "png", out);
+        return out.toByteArray();
+    }
+
+    /** JPEG 는 알파 채널을 담지 못한다. 투명이 섞여 있으면 흰 배경에 얹어 평평하게 만든다. */
+    private byte[] encodeJpeg(BufferedImage img, float quality) throws IOException {
+        BufferedImage rgb = img;
+        if (img.getColorModel().hasAlpha()) {
+            rgb = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = rgb.createGraphics();
+            g.setColor(java.awt.Color.WHITE);
+            g.fillRect(0, 0, img.getWidth(), img.getHeight());
+            g.drawImage(img, 0, 0, null);
+            g.dispose();
+        }
+        ImageWriter writer = ImageIO.getImageWritersByFormatName("jpeg").next();
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream();
+             ImageOutputStream ios = ImageIO.createImageOutputStream(out)) {
+            writer.setOutput(ios);
+            ImageWriteParam param = writer.getDefaultWriteParam();
+            if (param.canWriteCompressed()) {
+                param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+                param.setCompressionQuality(quality);
+            }
+            writer.write(null, new IIOImage(rgb, null, null), param);
+            ios.flush();
+            return out.toByteArray();
+        } finally {
+            writer.dispose();
         }
     }
 

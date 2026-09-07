@@ -28,6 +28,7 @@ import java.util.List;
 public class TenantConsoleMenuController {
 
     private final TenantConsoleMenuService menuService;
+    private final com.saas.admin.tenant.repository.TenantRepository tenantRepository;
 
     @Operation(summary = "내 역할이 볼 수 있는 콘솔 메뉴")
     @GetMapping
@@ -35,6 +36,10 @@ public class TenantConsoleMenuController {
         if (p == null || p.isAdmin() || !p.hasTenantContext()) {
             throw new ApiException(ErrorCode.ACCESS_DENIED, "업체 로그인이 필요합니다.");
         }
-        return ResponseEntity.ok(menuService.navFor(p.roleCode()));
+        // 업체가 쓰는 요금제까지 넘긴다. 요금제에 없는 메뉴는 역할과 무관하게 빠진다.
+        Long planId = tenantRepository.findById(p.tenantId())
+                .map(com.saas.admin.tenant.domain.Tenant::getPlanId)
+                .orElse(null);
+        return ResponseEntity.ok(menuService.navFor(p.roleCode(), planId));
     }
 }

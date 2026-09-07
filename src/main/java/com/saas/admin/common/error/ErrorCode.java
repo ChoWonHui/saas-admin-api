@@ -44,6 +44,9 @@ public enum ErrorCode {
     MENU_CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, "메뉴 분류를 찾을 수 없습니다."),
     MENU_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "메뉴를 찾을 수 없습니다."),
     PLAN_NOT_FOUND(HttpStatus.NOT_FOUND, "요금제를 찾을 수 없습니다."),
+    // 요금제에 주문 기능이 없는 업체(FREE)에서 주문이 들어온 경우.
+    // 화면에서 버튼을 숨기더라도 주소를 직접 부르면 들어올 수 있어 서버에서 막는다.
+    ORDER_NOT_ALLOWED(HttpStatus.FORBIDDEN, "이 매장은 메뉴판만 제공합니다. 주문은 직원에게 말씀해 주세요."),
     TENANT_CODE_GENERATION_FAILED(HttpStatus.CONFLICT, "업체 코드 생성에 실패했습니다. 다시 시도하세요."),
     INVALID_STATUS_TRANSITION(HttpStatus.CONFLICT, "허용되지 않는 상태 전이입니다."),
     WAITLIST_NOT_FOUND(HttpStatus.NOT_FOUND, "예약/대기 건을 찾을 수 없습니다."),

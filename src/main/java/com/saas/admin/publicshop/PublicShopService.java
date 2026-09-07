@@ -35,6 +35,7 @@ import java.util.List;
 public class PublicShopService {
 
     private final TenantRepository tenantRepository;
+    private final com.saas.admin.tenant.repository.TenantPlanRepository tenantPlanRepository;
     private final TenantBranchRepository branchRepository;
     private final BranchTableRepository tableRepository;
     private final TenantBranchService branchService;
@@ -42,13 +43,36 @@ public class PublicShopService {
     private final TenantHomeService homeService;
     private final OrderService orderService;
 
+    /**
+     * 이 업체가 손님 주문을 받을 수 있는가.
+     *
+     * 요금제(tenant_plan.allow_order)가 정한다. FREE 는 메뉴판만 제공하므로 false 다.
+     *
+     * 요금제가 비어 있으면 <b>받는다</b>. 요금제는 나중에 붙은 개념이라 예전 업체는 값이 없는데,
+     * 여기서 막으면 잘 쓰고 있던 가게의 주문이 어느 날 조용히 끊긴다.
+     * "주문을 막는다" 는 판단은 FREE 라고 명시된 경우에만 내린다.
+     */
+    private boolean orderAllowed(Tenant tenant) {
+        if (tenant.getPlanId() == null) return true;
+        return tenantPlanRepository.findById(tenant.getPlanId())
+                .map(com.saas.admin.tenant.domain.TenantPlan::isAllowOrder)
+                .orElse(true);
+    }
+
+    private void requireOrderAllowed(Tenant tenant) {
+        if (!orderAllowed(tenant)) {
+            throw new ApiException(ErrorCode.ORDER_NOT_ALLOWED);
+        }
+    }
+
     /** 가게 + 테이블 정보(화면 헤더용). */
     @Transactional(readOnly = true)
     public ShopTableView table(String tenantCode, String tableCode) {
         Tenant tenant = requireTenant(tenantCode);
         BranchTable t = requireTableOf(tenant.getId(), tableCode);
         String label = (t.getLabel() == null || t.getLabel().isBlank()) ? "테이블" : t.getLabel();
-        return new ShopTableView(tenant.getName(), tenant.getCode(), t.getId(), t.getCode(), label, t.getSeats(), t.activeOrTrue());
+        return new ShopTableView(tenant.getName(), tenant.getCode(), t.getId(), t.getCode(), label, t.getSeats(),
+                t.activeOrTrue(), orderAllowed(tenant));
     }
 
     /** 가게 메인 페이지 콘텐츠(손님용). 미표시면 published=false 로 가게명만 온다. */
@@ -87,13 +111,14 @@ public class PublicShopService {
     public ShopTakeoutView takeout(String tenantCode) {
         Tenant tenant = requireTenant(tenantCode);
         return new ShopTakeoutView(tenant.getName(), tenant.getCode(),
-                branchService.takeoutAvailable(tenant.getId()));
+                branchService.takeoutAvailable(tenant.getId()), orderAllowed(tenant));
     }
 
     /** 손님 포장 주문 접수 — 테이블 없이 포장으로. 포장주문이 꺼져 있으면 거부(TAKEOUT_STOPPED). */
     @Transactional
     public OrderPlaced placeTakeoutOrder(String tenantCode, PlaceOrderRequest req) {
         Tenant tenant = requireTenant(tenantCode);
+        requireOrderAllowed(tenant);
         if (!branchService.takeoutAvailable(tenant.getId())) {
             throw new ApiException(ErrorCode.TAKEOUT_STOPPED);
         }
@@ -111,6 +136,7 @@ public class PublicShopService {
     @Transactional
     public OrderPlaced placeOrder(String tenantCode, String tableCode, PlaceOrderRequest req) {
         Tenant tenant = requireTenant(tenantCode);
+        requireOrderAllowed(tenant);
         BranchTable t = requireTableOf(tenant.getId(), tableCode);
         if (!t.activeOrTrue()) {
             throw new ApiException(ErrorCode.TABLE_DISABLED);

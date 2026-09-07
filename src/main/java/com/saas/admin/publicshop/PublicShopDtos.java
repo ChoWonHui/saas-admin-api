@@ -17,11 +17,14 @@ public final class PublicShopDtos {
 
     /** QR 진입 시 화면 상단에 표시할 가게/테이블 정보. */
     public record ShopTableView(String shopName, String tenantCode,
-                                Long tableId, String tableCode, String tableLabel, int seats, boolean active) {
+                                Long tableId, String tableCode, String tableLabel, int seats, boolean active,
+                                /** 요금제가 주문을 허용하는가. false 면 손님앱은 메뉴판만 보여준다. */
+                                boolean orderEnabled) {
     }
 
     /** 포장 QR 진입 시 — 가게명 + 현재 포장주문을 받는지 여부(false 면 '정지' 화면). */
-    public record ShopTakeoutView(String shopName, String tenantCode, boolean takeoutAvailable) {
+    public record ShopTakeoutView(String shopName, String tenantCode, boolean takeoutAvailable,
+                                  boolean orderEnabled) {
     }
 
     /** 주문 접수 결과(손님에게 보여줄 최소 정보). */

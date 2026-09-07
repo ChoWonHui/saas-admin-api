@@ -39,6 +39,10 @@ public class TenantPlan {
     @Column(name = "max_reservation_per_month", nullable = false)
     private int maxReservationPerMonth;
 
+    /** 손님 주문·결제를 받을 수 있는 요금제인가. FREE 는 메뉴판만 제공한다. */
+    @Column(name = "allow_order", nullable = false)
+    private boolean allowOrder;
+
     @Column(name = "is_active", nullable = false)
     private boolean active;
 

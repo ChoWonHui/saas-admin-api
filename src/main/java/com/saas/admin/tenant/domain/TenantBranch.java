@@ -61,6 +61,10 @@ public class TenantBranch {
     @Column(name = "takeout_enabled", nullable = false, length = 1, columnDefinition = "CHAR(1) NOT NULL DEFAULT 'N'")
     private String takeoutEnabled;
 
+    /** 택배 주문 받기(배달 아님 — 택배사 운송장으로 타지역 발송). 'Y' 면 손님이 결제 시 배송지를 입력해 택배 주문을 넣는다. */
+    @Column(name = "parcel_enabled", nullable = false, length = 1, columnDefinition = "CHAR(1) NOT NULL DEFAULT 'N'")
+    private String parcelEnabled;
+
     /** 영업장 층수. 1 이상. 테이블은 각 층 캔버스에 배치된다. */
     @Column(name = "floor_count", nullable = false)
     private int floorCount;
@@ -99,6 +103,7 @@ public class TenantBranch {
         b.addressDetail = blankToNull(addressDetail);
         b.takeoutOnly = "N";
         b.takeoutEnabled = "N";
+        b.parcelEnabled = "N";
         b.floorCount = 1;
         b.canvasW = 760;
         b.canvasH = 460;
@@ -131,6 +136,16 @@ public class TenantBranch {
     /** 손님이 포장 주문을 넣을 수 있는가 — 포장 전문점이거나 포장 받기를 켠 경우. */
     public boolean takeoutAvailable() {
         return isTakeoutOnly() || isTakeoutEnabled();
+    }
+
+    /** 택배 주문 받기가 켜져 있는가. */
+    public boolean isParcelEnabled() {
+        return "Y".equals(parcelEnabled);
+    }
+
+    /** 택배 주문 받기 on/off. */
+    public void setParcelEnabled(boolean on) {
+        this.parcelEnabled = on ? "Y" : "N";
     }
 
     public void update(String name, String managerName, String contactPhone,

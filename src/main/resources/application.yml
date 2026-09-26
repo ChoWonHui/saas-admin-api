@@ -138,6 +138,72 @@ order:
 payment:
   gateway: ${PAYMENT_GATEWAY:mock}
 
+# 홈페이지(kanchenjunga.co.kr / exprism.co.kr) 문의 알림 메일.
+#
+#  - 수신자는 여기 적지 않는다. 공통코드 그룹 KCJG_CONTACT_EMAIL 의 "코드명"에 적힌 주소를
+#    사용 여부(use_yn='Y')인 것만 골라 보낸다 → 담당자가 바뀌면 콘솔에서 코드만 고치면 된다.
+#  - 발신 계정은 food-biz 와 같은 Brevo SMTP 릴레이를 공유한다.
+#
+#  ⚠️ SMTP 키는 이 파일(=git 커밋됨)에 두지 않는다. DB 비밀번호·JWT 키가 이미 여기 노출돼 있는데
+#     메일 발송 권한까지 얹으면 스팸 발송에 그대로 쓰인다.
+#     로컬은 application-local.yml, 운영은 BREVO_SMTP_KEY 환경변수로 준다.
+#     키가 비어 있으면 발송을 건너뛰고 로그만 남긴다 — 문의 자체는 정상 접수된다.
+mail:
+  enabled: ${MAIL_ENABLED:true}
+  from: ${MAIL_FROM:noreply@kanchenjunga.co.kr}
+  from-name: ${MAIL_FROM_NAME:KANCHENJUNGA}
+  # 알림 메일에 넣는 "관리자 콘솔에서 확인" 링크의 앞부분.
+  console-url: ${MAIL_CONSOLE_URL:https://kanchenjunga.co.kr}
+
+spring.mail:
+  host: ${MAIL_HOST:smtp-relay.brevo.com}
+  port: ${MAIL_PORT:587}
+  username: ${BREVO_SMTP_LOGIN:a1fc6f001@smtp-brevo.com}
+  password: ${BREVO_SMTP_KEY:}
+  properties:
+    mail:
+      smtp:
+        auth: true
+        starttls:
+          enable: true
+          required: true
+        connectiontimeout: 5000
+        timeout: 5000
+        writetimeout: 5000
+  default-encoding: UTF-8
+
+# 관리자 콘솔 메일함.
+#
+#  발신: Brevo SMTP 를 그대로 쓰고, 발신 주소만 {사번}@도메인 으로 바꿔 보낸다.
+#  수신: 메일 서버(Postfix+Dovecot)의 메일함을 IMAP 으로 읽어 DB 로 옮긴다.
+#        kanchenjunga.co.kr 로 오는 메일은 서버의 catch-all 이 한 계정에 모으고,
+#        어느 관리자 앞으로 온 것인지는 받는 주소의 앞부분(사번)으로 가른다.
+#
+#  ⚠️ IMAP 비밀번호는 이 파일에 두지 않는다. 운영은 서버의 application-s3.yml,
+#     로컬은 application-local.yml 에 둔다. 비어 있으면 동기화를 아예 돌리지 않는다
+#     (그냥 clone 해서 띄운 개발 환경이 접속 실패 로그로 뒤덮이지 않게).
+mailbox:
+  domain: ${MAILBOX_DOMAIN:kanchenjunga.co.kr}
+  imap:
+    enabled: ${MAILBOX_IMAP_ENABLED:false}
+    host: ${MAILBOX_IMAP_HOST:}
+    port: ${MAILBOX_IMAP_PORT:993}
+    username: ${MAILBOX_IMAP_USERNAME:}
+    password: ${MAILBOX_IMAP_PASSWORD:}
+    # 사설 메일 서버가 자체 서명 인증서를 쓴다. 고정 호스트라 신뢰 검사를 끈다.
+    trust-ssl: ${MAILBOX_IMAP_TRUST_SSL:true}
+    sync-interval-ms: ${MAILBOX_IMAP_SYNC_INTERVAL_MS:60000}
+    initial-delay-ms: ${MAILBOX_IMAP_INITIAL_DELAY_MS:20000}
+
+# spring-boot-starter-mail 은 /actuator/health 에 SMTP 접속 검사를 자동으로 끼워 넣는다.
+# 그대로 두면 Brevo 가 잠깐 느리거나 SMTP 키가 없는 환경에서 health 가 DOWN 이 되고,
+# Jenkins 배포 단계의 health check 가 실패해 "배포 실패" 로 뜬다 — 주문·메뉴는 멀쩡한데도.
+# 메일은 실패해도 문의 접수를 막지 않는 부가 기능이므로 서비스 상태 판정에서 뺀다.
+management:
+  health:
+    mail:
+      enabled: false
+
 logging:
   level:
     com.saas.admin: DEBUG

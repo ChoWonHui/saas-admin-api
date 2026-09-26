@@ -24,17 +24,23 @@ import java.util.List;
 public class TenantOrderController {
 
     private final OrderService orderService;
+    private final com.saas.admin.tenant.TenantBranchService branchService;
+
+    /** 택배 사용 여부. 요청/응답 공용. */
+    public record ParcelStatus(boolean enabled) {
+    }
 
     @Operation(summary = "주문 목록(날짜별 페이징)",
             description = "date(yyyy-MM-dd, 기본 오늘)의 주문을 page 단위로. status=ALL 또는 WAITING,RECEIVED,… (콤마 다중)")
     @GetMapping
     public ResponseEntity<OrderPage> list(@AuthenticationPrincipal AuthPrincipal p,
                                           @RequestParam(defaultValue = "ALL") String status,
+                                          @RequestParam(defaultValue = "ALL") String type,
                                           @RequestParam(required = false)
                                           @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate date,
                                           @RequestParam(defaultValue = "0") int page,
                                           @RequestParam(defaultValue = "20") int size) {
-        return ResponseEntity.ok(orderService.listByDate(tenantId(p), status, date, page, size));
+        return ResponseEntity.ok(orderService.listByDate(tenantId(p), status, type, date, page, size));
     }
 
     @Operation(summary = "진행 중 주문(테이블 현황판)", description = "종료/취소/결제완료 제외한 활성 주문만.")
@@ -62,6 +68,19 @@ public class TenantOrderController {
                                                     @PathVariable Long id,
                                                     @Valid @RequestBody StatusChangeRequest req) {
         return ResponseEntity.ok(orderService.changeStatus(tenantId(p), id, req.status()));
+    }
+
+    @Operation(summary = "택배 사용 여부 조회", description = "우리 가게가 택배 주문을 받는지.")
+    @GetMapping("/parcel")
+    public ResponseEntity<ParcelStatus> parcelStatus(@AuthenticationPrincipal AuthPrincipal p) {
+        return ResponseEntity.ok(new ParcelStatus(branchService.parcelEnabled(tenantId(p))));
+    }
+
+    @Operation(summary = "택배 사용 여부 토글", description = "주문관리에서 택배 받기를 켜고 끈다.")
+    @PatchMapping("/parcel")
+    public ResponseEntity<ParcelStatus> setParcel(@AuthenticationPrincipal AuthPrincipal p,
+                                                  @RequestBody ParcelStatus req) {
+        return ResponseEntity.ok(new ParcelStatus(branchService.setParcelEnabled(tenantId(p), req.enabled())));
     }
 
     private Long tenantId(AuthPrincipal p) {

@@ -53,25 +53,41 @@ public final class CodeDtos {
 
             @Schema(description = "화면에 보여줄 이름", example = "대리")
             @NotBlank(message = "코드명은 필수입니다.")
-            @Size(max = 50, message = "코드명은 50자를 넘을 수 없습니다.")
+            @Size(max = 255, message = "코드명은 255자를 넘을 수 없습니다.")
             String name,
 
             @Schema(description = "표시 순서. 없으면 맨 뒤에 붙는다.")
-            Integer sortOrder
+            Integer sortOrder,
+
+            @Schema(description = "비고 (자유 메모/부가값)")
+            @Size(max = 500, message = "비고는 500자를 넘을 수 없습니다.")
+            String remark,
+
+            @Schema(description = "비고2 (두 번째 자유 메모/부가값)")
+            @Size(max = 500, message = "비고2는 500자를 넘을 수 없습니다.")
+            String remark2
     ) {
     }
 
-    @Schema(description = "코드 수정. 코드값은 바꿀 수 없다 — 이름/순서/사용 여부만 바뀐다.")
+    @Schema(description = "코드 수정. 코드값은 바꿀 수 없다 — 이름/순서/사용 여부/비고만 바뀐다.")
     public record UpdateCodeRequest(
             @NotBlank(message = "코드명은 필수입니다.")
-            @Size(max = 50, message = "코드명은 50자를 넘을 수 없습니다.")
+            @Size(max = 255, message = "코드명은 255자를 넘을 수 없습니다.")
             String name,
 
             Integer sortOrder,
 
             @Schema(description = "'Y' = 사용 / 'N' = 중지 (선택지에서만 빠지고 과거 데이터 표시는 유지)")
             @Pattern(regexp = "^[YN]$", message = "사용 여부는 Y 또는 N 이어야 합니다.")
-            String useYn
+            String useYn,
+
+            @Schema(description = "비고 (자유 메모/부가값)")
+            @Size(max = 500, message = "비고는 500자를 넘을 수 없습니다.")
+            String remark,
+
+            @Schema(description = "비고2 (두 번째 자유 메모/부가값)")
+            @Size(max = 500, message = "비고2는 500자를 넘을 수 없습니다.")
+            String remark2
     ) {
     }
 
@@ -82,9 +98,11 @@ public final class CodeDtos {
     ) {
     }
 
-    public record CodeResponse(Long id, String code, String name, int sortOrder, String useYn) {
+    public record CodeResponse(Long id, String code, String name, int sortOrder, String useYn,
+                               String remark, String remark2) {
         public static CodeResponse from(CommonCode code) {
-            return new CodeResponse(code.getId(), code.getCode(), code.getName(), code.getSortOrder(), code.getUseYn());
+            return new CodeResponse(code.getId(), code.getCode(), code.getName(), code.getSortOrder(),
+                    code.getUseYn(), code.getRemark(), code.getRemark2());
         }
     }
 

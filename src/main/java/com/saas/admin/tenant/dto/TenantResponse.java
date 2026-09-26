@@ -18,15 +18,24 @@ public record TenantResponse(
         String postalCode,
         String address,
         String addressDetail,
+        String bankCode,
+        /** 은행 표시명. 공통코드 BANK_CD 에서 찾아 채운다. 코드가 지워졌으면 코드값이 그대로 온다. */
+        String bankName,
+        String accountNo,
+        String accountHolder,
         boolean deleted,
         long branchCount,
         LocalDateTime createdAt
 ) {
     public static TenantResponse from(Tenant tenant) {
-        return from(tenant, 0);
+        return from(tenant, 0, null);
     }
 
     public static TenantResponse from(Tenant tenant, long branchCount) {
+        return from(tenant, branchCount, null);
+    }
+
+    public static TenantResponse from(Tenant tenant, long branchCount, String bankName) {
         return new TenantResponse(
                 tenant.getId(),
                 tenant.getCode(),
@@ -41,6 +50,10 @@ public record TenantResponse(
                 tenant.getPostalCode(),
                 tenant.getAddress(),
                 tenant.getAddressDetail(),
+                tenant.getBankCode(),
+                bankName != null ? bankName : tenant.getBankCode(),
+                tenant.getAccountNo(),
+                tenant.getAccountHolder(),
                 tenant.isDeleted(),
                 branchCount,
                 tenant.getCreatedAt());

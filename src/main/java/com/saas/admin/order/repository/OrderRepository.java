@@ -22,6 +22,13 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     Page<Order> findByTenantIdAndStatusInAndCreatedAtBetween(Long tenantId, List<OrderStatus> statuses,
                                                              LocalDateTime from, LocalDateTime to, Pageable pageable);
 
+    // 주문 유형(DINE_IN=테이블 / TAKEOUT=포장 / PARCEL=택배)으로 거른 날짜별 페이징 조회.
+    Page<Order> findByTenantIdAndOrderTypeAndCreatedAtBetween(Long tenantId, String orderType,
+                                                             LocalDateTime from, LocalDateTime to, Pageable pageable);
+
+    Page<Order> findByTenantIdAndStatusInAndOrderTypeAndCreatedAtBetween(Long tenantId, List<OrderStatus> statuses,
+                                                                         String orderType, LocalDateTime from, LocalDateTime to, Pageable pageable);
+
     long countByTenantIdAndCreatedAtBetween(Long tenantId, LocalDateTime from, LocalDateTime to);
 
     // 매출 통계 — 기간 내 전체 주문(결제 여부는 서비스에서 판정). 기간은 createdAt 기준.

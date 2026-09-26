@@ -42,6 +42,8 @@ public class PublicShopService {
     private final TenantMenuService menuService;
     private final TenantHomeService homeService;
     private final OrderService orderService;
+    /** 은행 표시명을 공통코드(BANK_CD)에서 찾는다. */
+    private final com.saas.admin.code.repository.CommonCodeRepository codeRepository;
 
     /**
      * 이 업체가 손님 주문을 받을 수 있는가.
@@ -59,10 +61,70 @@ public class PublicShopService {
                 .orElse(true);
     }
 
+    /** 공통코드 BANK_CD 그룹의 코드 그룹명. */
+    private static final String BANK_GROUP = "BANK_CD";
+
+    /**
+     * 이 가게의 입금 계좌 안내.
+     * <p>
+     * 주문을 받는 가게(BASIC 이상)는 결제창에서 '계좌이체'를 고를 때 쓰고,
+     * 주문이 잠긴 가게(FREE)는 메뉴를 눌렀을 때 같은 안내를 보여준다. 두 곳이 같은 값을 쓴다.
+     * <p>
+     * 은행명은 코드가 아니라 공통코드(BANK_CD)의 이름으로 바꿔 보낸다 — 손님에게 '0' 을 보여줄 수는 없다.
+     * 은행·계좌번호 중 하나라도 비면 null 이라, 화면은 안내 자체를 띄우지 않는다.
+     */
+    private BankAccountView accountViewFor(Tenant tenant) {
+        String bankName = tenant.getBankCode() == null ? null
+                : codeRepository.findByGroupGroupCodeAndCode(BANK_GROUP, tenant.getBankCode())
+                        .map(com.saas.admin.code.domain.CommonCode::getName)
+                        .orElse(tenant.getBankCode());
+        String holder = (tenant.getAccountHolder() == null || tenant.getAccountHolder().isBlank())
+                ? tenant.getName()          // 예금주를 비워 두면 업체명으로 안내한다
+                : tenant.getAccountHolder();
+        BankAccountView view = new BankAccountView(bankName, tenant.getAccountNo(), holder);
+        return view.usable() ? view : null;
+    }
+
     private void requireOrderAllowed(Tenant tenant) {
         if (!orderAllowed(tenant)) {
             throw new ApiException(ErrorCode.ORDER_NOT_ALLOWED);
         }
+    }
+
+    /**
+     * 결제 화면 푸터에 넣을 사업자 정보. tenant 에 저장된 값을 그대로 담는다(요금제·발행 무관).
+     * 우편번호·주소·상세주소를 한 줄로 합치고, 빈 값은 null 로 내려 화면이 그 줄을 생략하게 한다.
+     */
+    private BusinessInfoView businessInfoFor(Tenant tenant) {
+        return new BusinessInfoView(
+                tenant.getName(),
+                blankToNull(tenant.getOwnerName()),
+                blankToNull(tenant.getBusinessNo()),
+                blankToNull(tenant.getMailOrderSalesNo()),
+                blankToNull(tenant.getContactPhone()),
+                blankToNull(tenant.getContactEmail()),
+                composeAddress(tenant));
+    }
+
+    /** 우편번호 + 주소 + 상세주소를 한 줄로. 전부 비면 null. */
+    private String composeAddress(Tenant tenant) {
+        StringBuilder sb = new StringBuilder();
+        if (tenant.getPostalCode() != null && !tenant.getPostalCode().isBlank()) {
+            sb.append('(').append(tenant.getPostalCode().trim()).append(") ");
+        }
+        if (tenant.getAddress() != null && !tenant.getAddress().isBlank()) {
+            sb.append(tenant.getAddress().trim());
+        }
+        if (tenant.getAddressDetail() != null && !tenant.getAddressDetail().isBlank()) {
+            if (sb.length() > 0) sb.append(' ');
+            sb.append(tenant.getAddressDetail().trim());
+        }
+        String out = sb.toString().trim();
+        return out.isEmpty() ? null : out;
+    }
+
+    private static String blankToNull(String s) {
+        return (s == null || s.isBlank()) ? null : s.trim();
     }
 
     /** 가게 + 테이블 정보(화면 헤더용). */
@@ -72,7 +134,7 @@ public class PublicShopService {
         BranchTable t = requireTableOf(tenant.getId(), tableCode);
         String label = (t.getLabel() == null || t.getLabel().isBlank()) ? "테이블" : t.getLabel();
         return new ShopTableView(tenant.getName(), tenant.getCode(), t.getId(), t.getCode(), label, t.getSeats(),
-                t.activeOrTrue(), orderAllowed(tenant));
+                t.activeOrTrue(), orderAllowed(tenant), accountViewFor(tenant), businessInfoFor(tenant));
     }
 
     /** 가게 메인 페이지 콘텐츠(손님용). 미표시면 published=false 로 가게명만 온다. */
@@ -111,7 +173,8 @@ public class PublicShopService {
     public ShopTakeoutView takeout(String tenantCode) {
         Tenant tenant = requireTenant(tenantCode);
         return new ShopTakeoutView(tenant.getName(), tenant.getCode(),
-                branchService.takeoutAvailable(tenant.getId()), orderAllowed(tenant));
+                branchService.takeoutAvailable(tenant.getId()), orderAllowed(tenant),
+                accountViewFor(tenant), businessInfoFor(tenant));
     }
 
     /** 손님 포장 주문 접수 — 테이블 없이 포장으로. 포장주문이 꺼져 있으면 거부(TAKEOUT_STOPPED). */
@@ -127,7 +190,39 @@ public class PublicShopService {
                         Math.max(0, l.unitPrice()), Math.max(1, l.quantity()), l.optionsText()))
                 .toList();
         OrderCreateRequest create = new OrderCreateRequest(
-                null, "포장", "TAKEOUT", "TAKEOUT_QR", req.memo(), req.paymentMethod(), req.paymentKey(), lines);
+                null, "포장", "TAKEOUT", "TAKEOUT_QR", req.memo(), req.paymentMethod(), req.paymentKey(), null, lines);
+        OrderDetail d = orderService.create(tenant.getId(), create);
+        return new OrderPlaced(d.orderId(), d.orderNo(), d.totalAmount(), d.status(), d.paid(), d.paymentMethod());
+    }
+
+    /** 택배 진입 — 가게명 + 지금 택배주문을 받는지. false 면 손님 화면에 '택배 미제공'을 띄운다. */
+    @Transactional
+    public ShopParcelView parcel(String tenantCode) {
+        Tenant tenant = requireTenant(tenantCode);
+        return new ShopParcelView(tenant.getName(), tenant.getCode(),
+                branchService.parcelEnabled(tenant.getId()), orderAllowed(tenant),
+                accountViewFor(tenant), businessInfoFor(tenant));
+    }
+
+    /**
+     * 손님 택배 주문 접수 — 테이블 없이 택배(배송지 입력)로.
+     * 택배 받기가 꺼져 있으면 거부(PARCEL_STOPPED). 유형/경로는 서버가 강제한다(PARCEL / PARCEL_WEB).
+     * 비로그인 경로다 — 손님이 보내는 것은 배송지와 주문 항목뿐이고, 가게는 URL 로만 지정된다.
+     */
+    @Transactional
+    public OrderPlaced placeParcelOrder(String tenantCode, PlaceParcelOrderRequest req) {
+        Tenant tenant = requireTenant(tenantCode);
+        requireOrderAllowed(tenant);
+        if (!branchService.parcelEnabled(tenant.getId())) {
+            throw new ApiException(ErrorCode.PARCEL_STOPPED);
+        }
+        var lines = req.items().stream()
+                .map(l -> new OrderLine(l.menuItemId(), l.menuName(),
+                        Math.max(0, l.unitPrice()), Math.max(1, l.quantity()), l.optionsText()))
+                .toList();
+        OrderCreateRequest create = new OrderCreateRequest(
+                null, "택배", "PARCEL", "PARCEL_WEB", req.memo(), req.paymentMethod(), req.paymentKey(),
+                req.shipping(), lines);
         OrderDetail d = orderService.create(tenant.getId(), create);
         return new OrderPlaced(d.orderId(), d.orderNo(), d.totalAmount(), d.status(), d.paid(), d.paymentMethod());
     }
@@ -149,7 +244,7 @@ public class PublicShopService {
                 .toList();
 
         OrderCreateRequest create = new OrderCreateRequest(
-                t.getId(), label, "DINE_IN", "TABLE_QR", req.memo(), req.paymentMethod(), req.paymentKey(), lines);
+                t.getId(), label, "DINE_IN", "TABLE_QR", req.memo(), req.paymentMethod(), req.paymentKey(), null, lines);
         OrderDetail d = orderService.create(tenant.getId(), create);
         return new OrderPlaced(d.orderId(), d.orderNo(), d.totalAmount(), d.status(), d.paid(), d.paymentMethod());
     }

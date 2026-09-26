@@ -30,11 +30,12 @@ public class PlatformOrderController {
     @GetMapping
     public ResponseEntity<OrderPage> list(@PathVariable Long tenantId,
                                           @RequestParam(required = false) String status,
+                                          @RequestParam(defaultValue = "ALL") String type,
                                           @RequestParam(required = false)
                                           @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate date,
                                           @RequestParam(defaultValue = "0") int page,
                                           @RequestParam(defaultValue = "20") int size) {
-        return ResponseEntity.ok(orderService.listByDate(tenantId, status, date, page, size));
+        return ResponseEntity.ok(orderService.listByDate(tenantId, status, type, date, page, size));
     }
 
     @Operation(summary = "업체 주문 상세")

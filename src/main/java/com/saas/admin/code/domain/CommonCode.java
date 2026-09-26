@@ -37,7 +37,7 @@ public class CommonCode {
     private String code;
 
     /** 화면에 보여줄 이름 (라벨). */
-    @Column(name = "code_name", nullable = false, length = 50)
+    @Column(name = "code_name", nullable = false, length = 255)
     private String name;
 
     @Column(name = "sort_order", nullable = false)
@@ -47,6 +47,14 @@ public class CommonCode {
     @Column(name = "use_yn", nullable = false, length = 1)
     private String useYn;
 
+    /** 비고 — 자유 메모/부가값. (예: 은행 앱 실행 URL 등) 없으면 null. */
+    @Column(name = "remark", length = 500)
+    private String remark;
+
+    /** 비고2 — 두 번째 자유 메모/부가값. 없으면 null. */
+    @Column(name = "remark2", length = 500)
+    private String remark2;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -55,20 +63,29 @@ public class CommonCode {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    public static CommonCode create(CodeGroup group, String code, String name, int sortOrder) {
+    public static CommonCode create(CodeGroup group, String code, String name, int sortOrder,
+                                    String remark, String remark2) {
         CommonCode commonCode = new CommonCode();
         commonCode.group = group;
         commonCode.code = code;
         commonCode.name = name;
         commonCode.sortOrder = sortOrder;
         commonCode.useYn = "Y";
+        commonCode.remark = blankToNull(remark);
+        commonCode.remark2 = blankToNull(remark2);
         return commonCode;
     }
 
-    public void update(String name, Integer sortOrder, String useYn) {
+    public void update(String name, Integer sortOrder, String useYn, String remark, String remark2) {
         this.name = name;
         if (sortOrder != null) this.sortOrder = sortOrder;
         if (useYn != null) this.useYn = useYn;
+        this.remark = blankToNull(remark);
+        this.remark2 = blankToNull(remark2);
+    }
+
+    private static String blankToNull(String s) {
+        return (s == null || s.isBlank()) ? null : s.trim();
     }
 
     /** 드래그앤드랍 순서 변경 — 순서만 바꾼다. */

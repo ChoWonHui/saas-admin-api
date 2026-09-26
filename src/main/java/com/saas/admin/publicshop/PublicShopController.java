@@ -58,6 +58,19 @@ public class PublicShopController {
         return ResponseEntity.ok(service.placeTakeoutOrder(tenantCode, req));
     }
 
+    @Operation(summary = "택배 주문 가능 여부", description = "택배 진입 시. false 면 손님 화면에 '택배 미제공'을 띄운다.")
+    @GetMapping("/parcel")
+    public ResponseEntity<ShopParcelView> parcel(@PathVariable String tenantCode) {
+        return ResponseEntity.ok(service.parcel(tenantCode));
+    }
+
+    @Operation(summary = "택배 주문 접수", description = "배송지 입력 필수. 택배가 꺼져 있으면 409(PARCEL_STOPPED). 비로그인.")
+    @PostMapping("/parcel/orders")
+    public ResponseEntity<OrderPlaced> parcelOrder(@PathVariable String tenantCode,
+                                                   @Valid @RequestBody PlaceParcelOrderRequest req) {
+        return ResponseEntity.ok(service.placeParcelOrder(tenantCode, req));
+    }
+
     @Operation(summary = "테이블 주문 접수")
     @PostMapping("/tables/{tableCode}/orders")
     public ResponseEntity<OrderPlaced> order(@PathVariable String tenantCode,

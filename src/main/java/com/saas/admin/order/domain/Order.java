@@ -65,6 +65,22 @@ public class Order {
     @Column(name = "memo", length = 300)
     private String memo;
 
+    // ── 택배(PARCEL) 배송지. 택배 주문에만 값이 있고, 그 외에는 null. ──
+    @Column(name = "ship_recipient", length = 50)
+    private String shipRecipient;
+
+    @Column(name = "ship_phone", length = 30)
+    private String shipPhone;
+
+    @Column(name = "ship_postal", length = 10)
+    private String shipPostal;
+
+    @Column(name = "ship_addr1", length = 255)
+    private String shipAddr1;
+
+    @Column(name = "ship_addr2", length = 255)
+    private String shipAddr2;
+
     /** 선불 결제 완료 여부. 선불 모델에선 주문 생성 시 이미 결제가 끝나 true 로 만들어진다. */
     @Column(name = "paid", nullable = false, length = 1, columnDefinition = "CHAR(1) NOT NULL DEFAULT 'N'")
     private String paid;
@@ -119,6 +135,19 @@ public class Order {
         o.paidAt = paidAt;
         o.paymentTxnId = paymentTxnId;
         return o;
+    }
+
+    /** 택배 배송지 지정. 값이 비면 null 로 저장한다. */
+    public void applyShipping(String recipient, String phone, String postal, String addr1, String addr2) {
+        this.shipRecipient = blank(recipient);
+        this.shipPhone = blank(phone);
+        this.shipPostal = blank(postal);
+        this.shipAddr1 = blank(addr1);
+        this.shipAddr2 = blank(addr2);
+    }
+
+    private static String blank(String s) {
+        return (s == null || s.isBlank()) ? null : s.trim();
     }
 
     public boolean isPaid() {

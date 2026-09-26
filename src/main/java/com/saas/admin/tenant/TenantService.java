@@ -38,6 +38,8 @@ public class TenantService {
     private final TenantRepository tenantRepository;
     private final TenantBranchRepository branchRepository;
     private final TenantPlanRepository tenantPlanRepository;
+    /** 은행 표시명을 공통코드(BANK_CD)에서 찾는다. 코드값만 저장하고 이름은 읽을 때 붙인다. */
+    private final com.saas.admin.code.repository.CommonCodeRepository commonCodeRepository;
     private final TenantSubscriptionRepository subscriptionRepository;
     private final UserAccountRepository userAccountRepository;
     private final TenantUserRepository tenantUserRepository;
@@ -134,13 +136,16 @@ public class TenantService {
                 request.postalCode(),
                 request.address(),
                 request.addressDetail(),
+                request.bankCode(),
+                request.accountNo(),
+                request.accountHolder(),
                 actorId));
 
         // 기본 미니룸을 미리 넣어, 저장 전에도 손님 화면에 가게 미니룸이 보이게 한다.
         tenantHomeRepository.save(TenantHome.createDefault(tenant.getId()));
 
         audit(tenant, actorId, "TENANT_CREATE", "code=" + tenant.getCode(), ip, userAgent);
-        return TenantResponse.from(tenant);
+        return TenantResponse.from(tenant, 0, bankNameOf(tenant.getBankCode()));
     }
 
     /** 업체 정보 수정. code·status 는 바꾸지 않는다(개설/중지는 별도). */
@@ -154,9 +159,10 @@ public class TenantService {
         }
         tenant.update(request.tenantName(), request.planId(), request.ownerName(), request.businessNo(),
                 request.mailOrderSalesNo(), request.contactPhone(), request.contactEmail(), request.postalCode(),
-                request.address(), request.addressDetail(), actorId);
+                request.address(), request.addressDetail(),
+                request.bankCode(), request.accountNo(), request.accountHolder(), actorId);
         audit(tenant, actorId, "TENANT_UPDATE", null, ip, userAgent);
-        return TenantResponse.from(tenant);
+        return TenantResponse.from(tenant, 0, bankNameOf(tenant.getBankCode()));
     }
 
     /** 소프트 삭제(삭제여부='Y'). 상태(CLOSED)와 별개. */
@@ -173,7 +179,7 @@ public class TenantService {
         Tenant tenant = findOrThrow(tenantId);
         tenant.restore(actorId);
         audit(tenant, actorId, "TENANT_RESTORE", null, ip, userAgent);
-        return TenantResponse.from(tenant);
+        return TenantResponse.from(tenant, 0, bankNameOf(tenant.getBankCode()));
     }
 
     /** 요금제 목록(콤보박스용). */
@@ -198,7 +204,7 @@ public class TenantService {
                     : tenantRepository.findByStatusAndDeleted(status, "N", pageable);
         }
         Map<Long, Long> branchCounts = branchCountMap(page.getContent().stream().map(Tenant::getId).toList());
-        return page.map((t) -> TenantResponse.from(t, branchCounts.getOrDefault(t.getId(), 0L)));
+        return page.map((t) -> TenantResponse.from(t, branchCounts.getOrDefault(t.getId(), 0L), bankNameOf(t.getBankCode())));
     }
 
     /** 여러 업체의 지점 수를 한 번에 모아 맵으로. */
@@ -221,7 +227,7 @@ public class TenantService {
         Tenant tenant = findOrThrow(tenantId);
         tenant.activate(actorId);
         audit(tenant, actorId, "TENANT_ACTIVATE", null, ip, userAgent);
-        return TenantResponse.from(tenant);
+        return TenantResponse.from(tenant, 0, bankNameOf(tenant.getBankCode()));
     }
 
     /** 서비스 중지 — 고객 화면은 404 가 아니라 503 을 낸다. (설계안 §4.1) */
@@ -230,7 +236,7 @@ public class TenantService {
         Tenant tenant = findOrThrow(tenantId);
         tenant.suspend(reason, actorId);
         audit(tenant, actorId, "TENANT_SUSPEND", reason, ip, userAgent);
-        return TenantResponse.from(tenant);
+        return TenantResponse.from(tenant, 0, bankNameOf(tenant.getBankCode()));
     }
 
     private Tenant findOrThrow(Long tenantId) {
@@ -257,6 +263,14 @@ public class TenantService {
      * 업체 코드를 만든다. 예측을 막기 위해 <b>고정 접두어 없이 전부 랜덤</b>이다.
      * 형식: 10자리(헷갈리는 0/O/1/I 제외한 대문자·숫자). 충돌하면 다시 뽑는다.
      */
+    /** 공통코드 BANK_CD 에서 은행 표시명을 찾는다. 없으면 null(응답에서는 코드값이 그대로 쓰인다). */
+    private String bankNameOf(String bankCode) {
+        if (bankCode == null || bankCode.isBlank()) return null;
+        return commonCodeRepository.findByGroupGroupCodeAndCode("BANK_CD", bankCode)
+                .map(com.saas.admin.code.domain.CommonCode::getName)
+                .orElse(null);
+    }
+
     private String nextTenantCode() {
         for (int i = 0; i < 20; i++) {
             String code = randomCode(10);

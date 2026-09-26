@@ -53,5 +53,44 @@ public class MenuBootstrap implements ApplicationRunner {
             menuRepository.save(AdminMenu.create(null, "업체 메뉴", "/tenant-menus", order));
             log.info("[부트스트랩] 업체 콘솔 메뉴 정책 관리 메뉴를 추가했다.");
         }
+
+        // 홈페이지 문의(회사 사이트 /contact 접수분) 메뉴 — 없으면 추가(멱등).
+        // 업체 문의(/inquiries)와 다른 화면이다. 저쪽은 사장님 1:1, 이쪽은 외부 방문자다.
+        if (!menuRepository.existsByUrl("/home-inquiries")) {
+            int order = menuRepository.findAllByOrderBySortOrderAscIdAsc().stream()
+                    .filter(m -> m.getParent() == null)
+                    .mapToInt(AdminMenu::getSortOrder).max().orElse(0) + 1;
+            menuRepository.save(AdminMenu.create(null, "홈페이지 문의", "/home-inquiries", order));
+            log.info("[부트스트랩] 홈페이지 문의 메뉴를 추가했다.");
+        }
+
+        // 메일함 — 없으면 추가(멱등). 관리자가 자기 사번 주소로 메일을 주고받는 화면이다.
+        if (!menuRepository.existsByUrl("/mailbox")) {
+            int order = menuRepository.findAllByOrderBySortOrderAscIdAsc().stream()
+                    .filter(m -> m.getParent() == null)
+                    .mapToInt(AdminMenu::getSortOrder).max().orElse(0) + 1;
+            menuRepository.save(AdminMenu.create(null, "메일함", "/mailbox", order));
+            log.info("[부트스트랩] 메일함 메뉴를 추가했다.");
+        }
+
+        // 홈페이지 공지사항(회사 사이트 /notice 에 나가는 글) 메뉴 — 없으면 추가(멱등).
+        // 사내 공지(/notices)·업체 공지(/tenant-notices)와 또 다른 대상이다. 이쪽은 외부 공개다.
+        if (!menuRepository.existsByUrl("/home-notices")) {
+            int order = menuRepository.findAllByOrderBySortOrderAscIdAsc().stream()
+                    .filter(m -> m.getParent() == null)
+                    .mapToInt(AdminMenu::getSortOrder).max().orElse(0) + 1;
+            menuRepository.save(AdminMenu.create(null, "홈페이지 공지", "/home-notices", order));
+            log.info("[부트스트랩] 홈페이지 공지 메뉴를 추가했다.");
+        }
+
+        // 광고 관리 — 없으면 추가(멱등). 예전엔 대시보드 안에 있던 '손님 화면 광고 배너' 를
+        // 전용 화면으로 분리해 권한으로 따로 제어한다.
+        if (!menuRepository.existsByUrl("/ads")) {
+            int order = menuRepository.findAllByOrderBySortOrderAscIdAsc().stream()
+                    .filter(m -> m.getParent() == null)
+                    .mapToInt(AdminMenu::getSortOrder).max().orElse(0) + 1;
+            menuRepository.save(AdminMenu.create(null, "광고 관리", "/ads", order));
+            log.info("[부트스트랩] 광고 관리 메뉴를 추가했다.");
+        }
     }
 }

@@ -29,6 +29,13 @@ public record TenantUpdateRequest(
 
         @Schema(description = "우편번호") @Size(max = 10) String postalCode,
         @Schema(description = "주소") @Size(max = 255) String address,
-        @Schema(description = "상세주소") @Size(max = 255) String addressDetail
+        @Schema(description = "상세주소") @Size(max = 255) String addressDetail,
+
+        @Schema(description = "입금 은행 코드 (공통코드 BANK_CD)", example = "0")
+        @Size(max = 30) String bankCode,
+        @Schema(description = "계좌번호", example = "123456-01-789012")
+        @Size(max = 50) String accountNo,
+        @Schema(description = "예금주", example = "홍길동")
+        @Size(max = 50) String accountHolder
 ) {
 }

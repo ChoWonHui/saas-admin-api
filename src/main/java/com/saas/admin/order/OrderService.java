@@ -71,7 +71,7 @@ public class OrderService {
      * date 가 null 이면 오늘. statusCsv=ALL/빈값이면 상태 무관.
      */
     @Transactional(readOnly = true)
-    public OrderPage listByDate(Long tenantId, String statusCsv, LocalDate date, int page, int size) {
+    public OrderPage listByDate(Long tenantId, String statusCsv, String type, LocalDate date, int page, int size) {
         LocalDate day = date != null ? date : LocalDate.now();
         LocalDateTime from = day.atStartOfDay();
         LocalDateTime to = day.plusDays(1).atStartOfDay();
@@ -79,9 +79,18 @@ public class OrderService {
         Pageable pageable = PageRequest.of(Math.max(page, 0), pageSize, Sort.by("createdAt").descending());
 
         List<OrderStatus> statuses = parseStatuses(statusCsv);
-        Page<Order> pageOrders = statuses.isEmpty()
-                ? orderRepository.findByTenantIdAndCreatedAtBetween(tenantId, from, to, pageable)
-                : orderRepository.findByTenantIdAndStatusInAndCreatedAtBetween(tenantId, statuses, from, to, pageable);
+        String orderType = parseType(type); // null 이면 유형 무관(전체)
+
+        Page<Order> pageOrders;
+        if (orderType == null) {
+            pageOrders = statuses.isEmpty()
+                    ? orderRepository.findByTenantIdAndCreatedAtBetween(tenantId, from, to, pageable)
+                    : orderRepository.findByTenantIdAndStatusInAndCreatedAtBetween(tenantId, statuses, from, to, pageable);
+        } else {
+            pageOrders = statuses.isEmpty()
+                    ? orderRepository.findByTenantIdAndOrderTypeAndCreatedAtBetween(tenantId, orderType, from, to, pageable)
+                    : orderRepository.findByTenantIdAndStatusInAndOrderTypeAndCreatedAtBetween(tenantId, statuses, orderType, from, to, pageable);
+        }
 
         Map<Long, List<OrderItem>> byOrder = pageOrders.isEmpty() ? Map.of()
                 : itemRepository.findByOrderIdInOrderByIdAsc(pageOrders.getContent().stream().map(Order::getId).toList()).stream()
@@ -140,10 +149,16 @@ public class OrderService {
         }
 
         // 결제 완료(paid)·접수(RECEIVED)로 생성 — 거래번호까지 기록.
-        Order order = orderRepository.save(Order.createPrepaid(
+        Order newOrder = Order.createPrepaid(
                 tenantId, branchId, req.tableId(), req.tableLabel(),
                 nextOrderNo(tenantId), req.orderType(), req.channel(), total, req.memo(),
-                pay.method(), pay.approvedAt(), pay.transactionId()));
+                pay.method(), pay.approvedAt(), pay.transactionId());
+        // 택배(PARCEL) 주문이면 배송지를 함께 저장한다.
+        if (req.shipping() != null) {
+            var s = req.shipping();
+            newOrder.applyShipping(s.recipient(), s.phone(), s.postalCode(), s.address(), s.addressDetail());
+        }
+        Order order = orderRepository.save(newOrder);
 
         List<OrderItem> items = req.items().stream()
                 .map(l -> {
@@ -202,6 +217,16 @@ public class OrderService {
         } catch (Exception e) {
             throw new ApiException(ErrorCode.INVALID_STATUS_TRANSITION, "알 수 없는 상태: " + s);
         }
+    }
+
+    /** 주문 유형 필터 정규화. ALL/빈값이면 null(전체), 그 외 DINE_IN/TAKEOUT/PARCEL 만 허용. */
+    private String parseType(String type) {
+        if (type == null || type.isBlank() || "ALL".equalsIgnoreCase(type)) return null;
+        String t = type.trim().toUpperCase();
+        return switch (t) {
+            case "DINE_IN", "TAKEOUT", "PARCEL" -> t;
+            default -> null;
+        };
     }
 
     private List<OrderStatus> parseStatuses(String csv) {

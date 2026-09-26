@@ -32,6 +32,7 @@ public enum ErrorCode {
     INQUIRY_NOT_FOUND(HttpStatus.NOT_FOUND, "문의를 찾을 수 없습니다."),
     ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "주문을 찾을 수 없습니다."),
     TAKEOUT_STOPPED(HttpStatus.CONFLICT, "현재 포장 주문이 정지되었습니다."),
+    PARCEL_STOPPED(HttpStatus.CONFLICT, "현재 택배 주문을 받지 않습니다."),
     TABLE_DISABLED(HttpStatus.CONFLICT, "현재 사용할 수 없는 테이블입니다. 매장 직원에게 문의해 주세요."),
     PAYMENT_FAILED(HttpStatus.BAD_REQUEST, "결제에 실패했습니다."),
     TENANT_NOT_FOUND(HttpStatus.NOT_FOUND, "업체를 찾을 수 없습니다."),
@@ -114,6 +115,19 @@ public enum ErrorCode {
     DECORATE_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "항목을 찾을 수 없습니다."),
     DECORATE_ITEM_DUPLICATED(HttpStatus.CONFLICT, "이 분류에 이미 있는 항목 키입니다."),
     DECORATE_LOCKED(HttpStatus.CONFLICT, "코드로 그려지는 기본 항목이라 삭제할 수 없습니다. 사용 여부(노출)만 바꿀 수 있습니다."),
+
+    // 홈페이지 문의 (회사 사이트 /contact — 무인증 접수)
+    HOME_INQUIRY_NOT_FOUND(HttpStatus.NOT_FOUND, "문의를 찾을 수 없습니다."),
+    HOME_INQUIRY_TOO_MANY(HttpStatus.TOO_MANY_REQUESTS, "문의가 너무 자주 접수되었습니다. 잠시 후 다시 시도해 주세요."),
+
+    // 메일함 (관리자 콘솔)
+    MAIL_NOT_FOUND(HttpStatus.NOT_FOUND, "메일을 찾을 수 없습니다."),
+    MAIL_RECIPIENT_REQUIRED(HttpStatus.BAD_REQUEST, "받는 사람을 입력하세요."),
+    MAIL_SEND_DISABLED(HttpStatus.SERVICE_UNAVAILABLE, "메일 발송이 설정되어 있지 않습니다. 관리자에게 문의하세요."),
+    MAIL_SEND_FAILED(HttpStatus.BAD_GATEWAY, "메일을 보내지 못했습니다. 주소를 확인하고 다시 시도하세요."),
+    MAIL_ATTACHMENT_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE, "첨부파일이 너무 큽니다. 전체 15MB 까지 보낼 수 있습니다."),
+    MAIL_IMAP_DISABLED(HttpStatus.SERVICE_UNAVAILABLE, "받은메일 가져오기가 설정되어 있지 않습니다."),
+    MAIL_SYNC_FAILED(HttpStatus.BAD_GATEWAY, "메일 서버에서 메일을 가져오지 못했습니다."),
 
     // 공통
     VALIDATION_FAILED(HttpStatus.BAD_REQUEST, "입력값이 올바르지 않습니다."),

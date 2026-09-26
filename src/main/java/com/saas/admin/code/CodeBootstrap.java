@@ -47,6 +47,11 @@ public class CodeBootstrap implements ApplicationRunner {
         // 주문관리(QR 주문) 공통코드 — 그룹이 없을 때만 그룹째 추가(멱등). 기존 설치에도 재기동 시 채워진다.
         // 상태값 자체는 화면 표시용이고, 실제 상태 전이 검증은 백엔드 Enum + 전이 정책이 담당한다.
         seedOrderingCodes();
+
+        // 홈페이지 공지사항 분류. 회사 사이트 /notice 의 말머리가 여기서 온다.
+        // 코드값은 글에 저장되므로 바꾸지 않는다 — 표시 이름만 콘솔에서 고친다.
+        seedIfAbsent("KCJG_NOTICE_CATEGORY", "홈페이지 공지 분류", "회사 사이트 공지사항의 말머리",
+                List.of("NOTICE:공지", "NEWS:소식", "EVENT:이벤트", "MAINTENANCE:점검", "PRESS:보도자료"));
     }
 
     /** MVP 주문관리 코드 그룹(스펙 10번의 20그룹). 이미 있으면 건너뛴다. */
@@ -116,7 +121,7 @@ public class CodeBootstrap implements ApplicationRunner {
     private void seedIfAbsent(String groupCode, String name, String description, List<String> codes) {
         if (groupRepository.existsById(groupCode)) return;
         seed(groupCode, name, description, codes);
-        log.info("[부트스트랩] 주문관리 공통코드 그룹 생성: {}", groupCode);
+        log.info("[부트스트랩] 공통코드 그룹 생성: {}", groupCode);
     }
 
     private void seed(String groupCode, String name, String description, List<String> codes) {
@@ -124,7 +129,7 @@ public class CodeBootstrap implements ApplicationRunner {
         int order = 1;
         for (String entry : codes) {
             String[] parts = entry.split(":", 2);
-            codeRepository.save(CommonCode.create(group, parts[0], parts[1], order++));
+            codeRepository.save(CommonCode.create(group, parts[0], parts[1], order++, null, null));
         }
     }
 }

@@ -76,14 +76,15 @@ public class CodeService {
                 ? request.sortOrder()
                 : codeRepository.findByGroupGroupCodeOrderBySortOrderAscIdAsc(groupCode).stream()
                         .mapToInt(CommonCode::getSortOrder).max().orElse(0) + 1;
-        return CodeResponse.from(codeRepository.save(CommonCode.create(group, request.code(), request.name(), sortOrder)));
+        return CodeResponse.from(codeRepository.save(
+                CommonCode.create(group, request.code(), request.name(), sortOrder, request.remark(), request.remark2())));
     }
 
     @Transactional
     public CodeResponse updateCode(Long id, UpdateCodeRequest request) {
         CommonCode code = codeRepository.findById(id)
                 .orElseThrow(() -> new ApiException(ErrorCode.CODE_NOT_FOUND));
-        code.update(request.name(), request.sortOrder(), request.useYn());
+        code.update(request.name(), request.sortOrder(), request.useYn(), request.remark(), request.remark2());
         return CodeResponse.from(code);
     }
 

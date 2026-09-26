@@ -57,6 +57,26 @@ public class TenantBranchService {
                 .map(TenantBranch::getId);
     }
 
+    /** 이 업체(기본 지점)의 택배 주문 받기 여부. 지점이 없으면 false. */
+    @Transactional(readOnly = true)
+    public boolean parcelEnabled(Long tenantId) {
+        requireTenant(tenantId);
+        return branchRepository.findByTenantIdAndDeletedOrderByBranchNoAsc(tenantId, NOT_DELETED).stream()
+                .findFirst()
+                .map(TenantBranch::isParcelEnabled)
+                .orElse(false);
+    }
+
+    /** 이 업체(기본 지점)의 택배 주문 받기 on/off. 지점이 없으면 자동 생성해 설정한다. */
+    @Transactional
+    public boolean setParcelEnabled(Long tenantId, boolean on) {
+        Long branchId = defaultBranchId(tenantId);
+        TenantBranch branch = branchRepository.findById(branchId)
+                .orElseThrow(() -> new ApiException(ErrorCode.BRANCH_NOT_FOUND));
+        branch.setParcelEnabled(on);
+        return branch.isParcelEnabled();
+    }
+
     /** 한 업체의 지점 목록(호점 순). */
     @Transactional(readOnly = true)
     public List<BranchResponse> list(Long tenantId) {

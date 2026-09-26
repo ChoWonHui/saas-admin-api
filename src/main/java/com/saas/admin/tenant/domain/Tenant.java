@@ -56,6 +56,23 @@ public class Tenant {
     @Column(name = "mail_order_sales_no", length = 30)
     private String mailOrderSalesNo;
 
+    /**
+     * 입금 계좌 — 은행 코드. 공통코드 그룹 {@code BANK_CD} 의 코드값을 담는다.
+     * <p>
+     * 은행 이름(라벨)은 저장하지 않고 읽을 때 코드에서 찾는다. 은행이 이름을 바꾸면
+     * 공통코드 한 줄만 고치면 되고, 과거 업체까지 같이 바뀌어야 맞기 때문이다.
+     */
+    @Column(name = "bank_code", length = 30)
+    private String bankCode;
+
+    /** 계좌번호. 은행마다 자릿수·하이픈 규칙이 달라 입력받은 그대로 둔다. */
+    @Column(name = "account_no", length = 50)
+    private String accountNo;
+
+    /** 예금주. 손님이 입금 전에 맞는 계좌인지 확인하는 값이라 계좌번호와 함께 보여준다. */
+    @Column(name = "account_holder", length = 50)
+    private String accountHolder;
+
     @Column(name = "contact_phone", length = 20)
     private String contactPhone;
 
@@ -140,12 +157,16 @@ public class Tenant {
     public static Tenant create(String code, String name, Long planId, String ownerName,
                                 String businessNo, String mailOrderSalesNo,
                                 String contactPhone, String contactEmail,
-                                String postalCode, String address, String addressDetail, Long createdBy) {
+                                String postalCode, String address, String addressDetail,
+                                String bankCode, String accountNo, String accountHolder, Long createdBy) {
         Tenant t = new Tenant(code, name, planId, ownerName, businessNo, contactPhone, contactEmail, createdBy);
         t.mailOrderSalesNo = blankToNull(mailOrderSalesNo);
         t.postalCode = postalCode;
         t.address = address;
         t.addressDetail = addressDetail;
+        t.bankCode = blankToNull(bankCode);
+        t.accountNo = blankToNull(accountNo);
+        t.accountHolder = blankToNull(accountHolder);
         return t;
     }
 
@@ -155,7 +176,8 @@ public class Tenant {
      */
     public void update(String name, Long planId, String ownerName, String businessNo, String mailOrderSalesNo,
                        String contactPhone, String contactEmail, String postalCode,
-                       String address, String addressDetail, Long actorId) {
+                       String address, String addressDetail,
+                       String bankCode, String accountNo, String accountHolder, Long actorId) {
         if (name != null && !name.isBlank()) this.name = name;
         this.planId = planId;
         this.ownerName = blankToNull(ownerName);
@@ -166,6 +188,9 @@ public class Tenant {
         this.postalCode = blankToNull(postalCode);
         this.address = blankToNull(address);
         this.addressDetail = blankToNull(addressDetail);
+        this.bankCode = blankToNull(bankCode);
+        this.accountNo = blankToNull(accountNo);
+        this.accountHolder = blankToNull(accountHolder);
         this.updatedBy = actorId;
     }
 

@@ -12,6 +12,8 @@ pipeline {
         DOCKER_IMAGE   = "saas-admin-api:${BUILD_NUMBER}"
         CONTAINER_PORT = '8089'
         HOST_PORT      = '8081'
+        // 비밀 설정(S3·Pixabay·Brevo SMTP 키, QR base-url). 서버에만 두고 컨테이너에 읽기전용으로 붙인다.
+        SECRETS_FILE   = '/opt/saas-admin/secrets/application-s3.yml'
     }
 
     stages {
@@ -40,12 +42,22 @@ pipeline {
                     """
                     // --memory 로 상한을 둔다. 이 장비는 RAM 이 952MB 뿐이라
                     // 한 컨테이너가 부풀면 Jenkins 나 food-biz-api 가 밀려난다.
+                    //
+                    // ⚠️ 비밀 설정 파일을 반드시 마운트한다.
+                    //    S3 키 / Pixabay 키 / Brevo SMTP 키 / QR 이 가리킬 손님앱 주소가 이 파일에만 있다.
+                    //    빠뜨리면 앱은 정상 기동하지만 이미지 업로드가 base64 로 떨어지고,
+                    //    문의 알림 메일이 나가지 않으며, 새로 만든 QR 이 http://localhost:5175 를 가리킨다.
+                    //    (실제로 이 마운트 없이 돌린 적이 있어 여기에 못 박아 둔다)
+                    //    환경변수(-e)로 주지 않는 이유: docker inspect 에 비밀이 그대로 찍힌다.
                     sh """
                         docker run -d \
                             --name ${APP_NAME} \
                             -p ${HOST_PORT}:${CONTAINER_PORT} \
                             --memory 400m \
                             --restart unless-stopped \
+                            -v ${SECRETS_FILE}:/config/application-s3.yml:ro \
+                            -e SPRING_CONFIG_ADDITIONAL_LOCATION=/config/application-s3.yml \
+                            -e LC_ALL=en_US.UTF-8 \
                             ${DOCKER_IMAGE}
                     """
                 }
